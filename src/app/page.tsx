@@ -108,7 +108,7 @@ export default function Home() {
 
       <section className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-300">Resume file (PDF, DOCX or TXT)</label>
+          <label htmlFor="resume-file" className="mb-2 block text-sm font-medium text-zinc-300">Resume file (PDF, DOCX or TXT)</label>
           <div
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
@@ -117,16 +117,17 @@ export default function Home() {
               setDragging(false);
               onPick(e.dataTransfer.files?.[0] ?? null);
             }}
-            onClick={() => inputRef.current?.click()}
-            className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
-              dragging ? "border-sky-400 bg-sky-400/5" : "border-zinc-700 hover:border-zinc-500"
+            className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
+              dragging ? "border-sky-400 bg-sky-400/5" : "border-zinc-700"
             }`}
           >
             <input
+              id="resume-file"
               ref={inputRef}
               type="file"
               accept=".pdf,.docx,.txt,.md"
-              className="hidden"
+              className="sr-only"
+              aria-describedby="resume-file-hint"
               onChange={(e) => onPick(e.target.files?.[0] ?? null)}
             />
             {file ? (
@@ -135,18 +136,27 @@ export default function Home() {
               </p>
             ) : (
               <>
-                <p className="text-sm text-zinc-300">Drag &amp; drop your resume here, or click to browse</p>
-                <p className="mt-1 text-xs text-zinc-500">Text-based PDF, DOCX, TXT — max 10 MB</p>
+                <p className="text-sm text-zinc-300">Drag &amp; drop your resume here</p>
+                <label
+                  htmlFor="resume-file"
+                  className="mt-2 cursor-pointer rounded-lg border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-100 hover:border-zinc-400 hover:bg-zinc-800/60 focus-within:outline-none"
+                >
+                  Choose a file
+                </label>
+                <p id="resume-file-hint" className="mt-2 text-xs text-zinc-500">
+                  Text-based PDF, DOCX, TXT — max 10 MB
+                </p>
               </>
             )}
           </div>
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-300">
+          <label htmlFor="resume-text" className="mb-2 block text-sm font-medium text-zinc-300">
             …or paste the resume text
           </label>
           <textarea
+            id="resume-text"
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={5}
@@ -156,10 +166,11 @@ export default function Home() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-300">
+          <label htmlFor="job-description" className="mb-2 block text-sm font-medium text-zinc-300">
             Target job description <span className="text-zinc-500">(optional — adds keyword matching)</span>
           </label>
           <textarea
+            id="job-description"
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
             rows={4}
@@ -169,7 +180,7 @@ export default function Home() {
         </div>
 
         {error && (
-          <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>
+          <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>
         )}
 
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
@@ -200,7 +211,16 @@ export default function Home() {
       </section>
 
       {result && (
-        <section className="mt-8 space-y-6">
+        <section
+          className="mt-8 space-y-6"
+          aria-live="polite"
+          aria-label="Analysis results"
+        >
+          <p className="sr-only">
+            Analysis complete. Score {result.score} out of 100, grade {result.grade}.{" "}
+            {result.recommendations.length} recommendation
+            {result.recommendations.length === 1 ? "" : "s"}.
+          </p>
           {result.warnings.length > 0 && (
             <div className="space-y-1 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
               {result.warnings.map((w, i) => (
