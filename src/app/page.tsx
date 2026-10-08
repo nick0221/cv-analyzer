@@ -5,6 +5,7 @@ import type { AnalysisResult } from "@/lib/types";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { DimensionBar } from "@/components/DimensionBar";
 import { RecommendationCard } from "@/components/RecommendationCard";
+import { ConsentBanner, getConsent } from "@/components/ConsentBanner";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -16,7 +17,22 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  // Lazy init from the consent cookie (client-only, matches SSR since the
+  // server renders the banner as visible until hydration).
+  const [consent, setConsentState] = useState<"accepted" | "declined" | null>(() => getConsent());
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const onConsentChange = useCallback((value: "accepted" | "declined") => {
+    setConsentState(value);
+    if (value === "declined") {
+      // Declining clears any uploaded/pasted CV data from this session.
+      setFile(null);
+      setText("");
+      setJobDescription("");
+      setResult(null);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }, []);
 
   const onPick = useCallback((f: File | null) => {
     if (!f) return;
@@ -32,6 +48,10 @@ export default function Home() {
     setError(null);
     if (!file && text.trim().length < 40) {
       setError("Upload a PDF/DOCX or paste at least a few lines of your resume.");
+      return;
+    }
+    if (consent !== "accepted") {
+      setError("Please accept the data-usage notice first (bottom of the page).");
       return;
     }
     setLoading(true);
@@ -221,6 +241,8 @@ export default function Home() {
       <footer className="mt-12 border-t border-zinc-800 pt-6 text-xs text-zinc-500">
         Analysis runs on the server and is not stored. Recommendations are heuristic — always use your own judgement.
       </footer>
+
+      {consent === null && <ConsentBanner onConsent={onConsentChange} />}
     </main>
   );
 }

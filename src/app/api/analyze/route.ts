@@ -10,6 +10,15 @@ function badRequest(message: string, status = 400) {
 }
 
 export async function POST(req: NextRequest) {
+  // Consent is required before any CV data is processed, enforced server-side too.
+  const consent = req.cookies.get("cv-consent")?.value;
+  if (consent !== "accepted") {
+    return badRequest(
+      "You must accept the data-usage notice before analyzing a resume. Please reload the page and accept the consent banner.",
+      403,
+    );
+  }
+
   let formData: FormData;
   try {
     formData = await req.formData();
