@@ -1,11 +1,18 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import type { AnalysisResult } from "@/lib/types";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { DimensionBar } from "@/components/DimensionBar";
 import { RecommendationCard } from "@/components/RecommendationCard";
-import { ConsentBanner, getConsent } from "@/components/ConsentBanner";
+import { ConsentBanner } from "@/components/ConsentBanner";
+import {
+  getConsentSnapshot,
+  getConsentServerSnapshot,
+  setConsent,
+  clearConsent,
+  subscribeConsent,
+} from "@/lib/consent";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -17,22 +24,28 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  // Lazy init from the consent cookie (client-only, matches SSR since the
-  // server renders the banner as visible until hydration).
-  const [consent, setConsentState] = useState<"accepted" | "declined" | null>(() => getConsent());
+  // Declining the banner hides it for this session (without accepting).
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const consent = useSyncExternalStore(
+    subscribeConsent,
+    getConsentSnapshot,
+    getConsentServerSnapshot,
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const onConsentChange = useCallback((value: "accepted" | "declined") => {
-    setConsentState(value);
-    if (value === "declined") {
-      // Declining clears any uploaded/pasted CV data from this session.
-      setFile(null);
-      setText("");
-      setJobDescription("");
-      setResult(null);
-      if (inputRef.current) inputRef.current.value = "";
+  function onConsentToggle(checked: boolean) {
+    if (checked) {
+      setConsent();
+      setBannerDismissed(true);
+    } else {
+      clearConsent();
     }
-  }, []);
+  }
+
+  function acceptFromBanner() {
+    setConsent();
+    setBannerDismissed(true);
+  }
 
   const onPick = useCallback((f: File | null) => {
     if (!f) return;
@@ -50,8 +63,8 @@ export default function Home() {
       setError("Upload a PDF/DOCX or paste at least a few lines of your resume.");
       return;
     }
-    if (consent !== "accepted") {
-      setError("Please accept the data-usage notice first (bottom of the page).");
+    if (!consent) {
+      setError("Please tick the consent box confirming your CV may be analyzed.");
       return;
     }
     setLoading(true);
@@ -159,10 +172,23 @@ export default function Home() {
           <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>
         )}
 
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => onConsentToggle(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-sky-500"
+          />
+          <span className="text-sm text-zinc-300">
+            I agree that my resume/CV content will be sent to and analyzed by this app to produce a
+            quality score and recommendations. It is processed for this purpose only and not stored.
+          </span>
+        </label>
+
         <div className="flex items-center gap-3">
           <button
             onClick={analyze}
-            disabled={loading}
+            disabled={loading || !consent}
             className="rounded-xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Analyzing…" : "Analyze resume"}
@@ -240,9 +266,47 @@ export default function Home() {
 
       <footer className="mt-12 border-t border-zinc-800 pt-6 text-xs text-zinc-500">
         Analysis runs on the server and is not stored. Recommendations are heuristic — always use your own judgement.
+        {result && (
+          <div className="mt-2">
+            <button
+              onClick={async () => {
+                const { buildMarkdownReport } = await import("@/lib/report");
+                const md = buildMarkdownReport(result, { filename: file?.name });
+                try {
+                  await navigator.clipboard.writeText(md);
+                  setError(null);
+                } catch {
+                  // Fallback: prompt user to copy
+                  const ta = document.createElement("textarea");
+                  ta.value = md;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(ta);
+                }
+                // Simple transient feedback via button label
+                const el = document.activeElement as HTMLButtonElement | null;
+                if (el) {
+                  const old = el.textContent;
+                  el.textContent = "Copied!";
+                  setTimeout(() => {
+                    if (el.isConnected) el.textContent = old;
+                  }, 1200);
+                }
+              }}
+              className="text-sky-400 hover:text-sky-300 underline"
+            >
+              Copy report as Markdown
+            </button>
+          </div>
+        )}
       </footer>
 
-      {consent === null && <ConsentBanner onConsent={onConsentChange} />}
+      <ConsentBanner
+        open={!consent && !bannerDismissed}
+        onAccept={acceptFromBanner}
+        onDecline={() => setBannerDismissed(true)}
+      />
     </main>
   );
 }
