@@ -62,7 +62,7 @@ export function runSkillsRule(text: string): DimensionResult {
   }
 
   return {
-    key: "structure",
+    key: "skills",
     label: "Skills & technologies",
     score: clamp(score),
     summary:

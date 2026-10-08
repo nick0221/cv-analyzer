@@ -69,7 +69,7 @@ export function runProfessionalismRule(text: string): DimensionResult {
   }
 
   return {
-    key: "structure",
+    key: "professionalism",
     label: "Links & professional polish",
     score: clamp(score),
     summary:

@@ -82,7 +82,7 @@ export function runExperienceRule(text: string): DimensionResult {
   }
 
   return {
-    key: "structure",
+    key: "experience",
     label: "Experience & chronology",
     score: clamp(score),
     summary:
