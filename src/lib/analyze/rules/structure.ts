@@ -81,7 +81,6 @@ export function runStructureRule(text: string): DimensionResult {
     key: "structure",
     label: "Structure & sections",
     score,
-    weight: 0.15,
     summary: `${found.length}/${REQUIRED_SECTIONS.length} standard sections detected.`,
     findings,
     recommendations,

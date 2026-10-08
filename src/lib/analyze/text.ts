@@ -103,6 +103,85 @@ export function unique<T>(items: T[]): T[] {
   return Array.from(new Set(items));
 }
 
+/** Match years of the form 2018, '19, or 2023-2024. */
+export function yearsIn(text: string): string[] {
+  return unique(text.match(/\b(?:19|20)\d{2}\b/g) ?? []);
+}
+
+/**
+ * Match date ranges commonly found in resume experience/education lines:
+ * "Mar 2021 - Present", "2019-2021", "06/2018 – 02/2021", "Jan 2020 to Jun 2022".
+ */
+export function dateRangesIn(text: string): string[] {
+  return text.match(
+    /\b(?:(?:19|20)\d{2}\s*[-–to]+\s*(?:(?:19|20)\d{2}|present|current))|(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:19|20)\d{2}\s*[-–to]{1,3}\s*(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:19|20)\d{2}|present|current))/gi,
+  ) ?? [];
+}
+
+/** Matches URLs with a recognizable protocol. */
+export function urlsIn(text: string): string[] {
+  const re = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+  const matches = text.match(re) ?? [];
+  return unique(matches.map((u) => u.replace(/[),.;:]+$/, "")));
+}
+
+/** Matches common profile/social mentions even without a full URL. */
+export function profileLinks(text: string): string[] {
+  const found: string[] = [];
+  for (const r of [
+    /linkedin\.com\/in\/[a-z0-9_-]+/gi,
+    /github\.com\/[a-z0-9_-]+/gi,
+    /(?:portfolio|personal site|website|blog):?/gi,
+    /gitlab\.com\/[a-z0-9_-]+/gi,
+    /stackoverflow\.com\/users\//gi,
+    /medium\.com\/@?[a-z0-9_-]+/gi,
+  ]) {
+    const m = text.match(r);
+    if (m) found.push(...m);
+  }
+  return unique(found.map((u) => u.toLowerCase()));
+}
+
+/** Common tech/general skills worth spotting even when there is no dedicated section. */
+const SKILL_SEED = new Set([
+  "react", "next.js", "node.js", "node", "typescript", "javascript", "python",
+  "java", "go", "rust", "c++", "c#", "php", "ruby", "swift", "kotlin", "sql",
+  "postgresql", "postgres", "mysql", "mongodb", "redis", "graphql", "rest",
+  "api", "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "ci/cd",
+  "git", "linux", "html", "css", "tailwind", "angular", "vue", "svelte",
+  "express", "django", "flask", "spring", "rails", "laravel", "wordpress",
+  "kafka", "rabbitmq", "elasticsearch", "hadoop", "spark", "airflow", "ml",
+  "machine learning", "deep learning", "nlp", "pytorch", "tensorflow", "keras",
+  "pandas", "numpy", "scikit-learn", "data", "analytics", "excel", "tableau",
+  "power bi", "figma", "sketch", "photoshop", "illustrator", "jira", "confluence",
+  "slack", "agile", "scrum", "kanban", "seo", "sem", "crm", "salesforce", "hubspot",
+  "marketing", "sales", "recruiting", "finance", "accounting", "leadership",
+  "communication", "collaboration", "management", "project management", "pmp",
+]);
+
+/**
+ * Extract candidate skill tokens from the resume. Numbers, single letters and
+ * common words are filtered; multi-word phrases stay intact.
+ */
+export function skillTokens(text: string): string[] {
+  const lower = text.toLowerCase();
+  const found = [...SKILL_SEED].filter((skill) => lower.includes(skill));
+  // Also catch generic capitalized tech tokens not in the seed (e.g. "Agile", "Jenkins").
+  const generic = lower.match(/\b[a-z][a-z0-9+.-]{2,}\b/g) ?? [];
+  const freq = new Map<string, number>();
+  for (const g of generic) {
+    // ignore obvious non-skills
+    if ([...STOPWORDS].includes(g) || g.length < 3) continue;
+    freq.set(g, (freq.get(g) ?? 0) + 1);
+  }
+  const mostCommon = [...freq.entries()]
+    .filter(([, c]) => c >= 3)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([w]) => w);
+  return unique([...found, ...mostCommon].map((s) => s.trim()));
+}
+
 export function hasMetric(text: string): boolean {
   // Currency, percentages, counts, magnitudes, durations, multipliers, years.
   return /(?:\d[\d,.]*\s*(?:%|percent|k\b|m\b|bn\b|x\b|hrs?\b|hours?\b|days?\b|weeks?\b|months?\b|years?\b|\+))|(?:[$€£]\s?\d)|(?:\b\d+(?:\.\d+)?\b)/i.test(

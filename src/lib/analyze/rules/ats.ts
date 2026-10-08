@@ -87,7 +87,6 @@ export function runAtsRule(text: string): DimensionResult {
     key: "ats",
     label: "ATS-safe formatting",
     score,
-    weight: 0.15,
     summary,
     findings,
     recommendations,

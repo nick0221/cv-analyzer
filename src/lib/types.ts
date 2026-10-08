@@ -6,7 +6,10 @@ export type DimensionKey =
   | "verbs"
   | "length"
   | "ats"
-  | "language";
+  | "language"
+  | "experience"
+  | "skills"
+  | "professionalism";
 
 export interface Recommendation {
   priority: Priority;
@@ -21,8 +24,11 @@ export interface DimensionResult {
   label: string;
   /** 0-100 */
   score: number;
-  /** Relative weight used in the total score, 0-1. */
-  weight: number;
+  /**
+   * Relative weight used in the total score, 0-1.
+   * Optional because rules no longer set it; the engine assigns weights.
+   */
+  weight?: number;
   summary: string;
   findings: string[];
   recommendations: Recommendation[];

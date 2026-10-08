@@ -10,15 +10,17 @@ Everything runs server-side and stateless — no database, no account, nothing s
 
 | Dimension | Weight | What it looks at |
 |---|---|---|
-| Quantified impact | 25% | Share of bullets containing a number/metric |
-| Structure & sections | 15% | Contact block, Summary, Experience, Education, Skills |
-| Action verbs | 15% | Bullets opening with strong verbs vs. "Responsible for…" |
-| Length & density | 15% | Word count, page estimate, overlong bullets, bullet count |
-| ATS-safe formatting | 15% | Multi-column layout, date ranges, header/footer traps, emoji |
-| Language & typos | 15% | Common misspellings, doubled words, first-person, tense mix |
-| Job-description match | additive | Stemmed keyword overlap with the pasted posting |
+| Quantified impact | 22% | Share of bullets containing a number/metric |
+| Structure & sections | 16% | Contact block, Summary, Experience, Education, Skills |
+| Experience & chronology | 14% | Date ranges, job titles, career timeline coherence |
+| Skills & technologies | 12% | Skills breadth, dedicated section, keyword presence |
+| Action verbs | 10% | Bullets opening with strong verbs vs. "Responsible for…" |
+| Length & density | 10% | Word count, page estimate, overlong bullets, bullet count |
+| ATS-safe formatting | 8% | Multi-column layout, date ranges, header/footer traps, emoji |
+| Language & typos | 4% | Common misspellings, doubled words, first-person, tense mix |
+| Links & professional polish | 4% | LinkedIn/GitHub/portfolio links, awards/certifications, consistency |
 
-The overall score is the weighted average of the six dimensions; the job match is
+The overall score is the weighted average of the nine dimensions; the job match is
 reported separately and adds its own recommendation.
 
 ## Getting started

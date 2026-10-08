@@ -1,10 +1,13 @@
-import type { AnalysisResult, AnalyzeRequest, DimensionResult, Recommendation } from "../types";
+import type { AnalysisResult, AnalyzeRequest, DimensionKey, DimensionResult, Recommendation } from "../types";
 import { runStructureRule } from "./rules/structure";
 import { runImpactRule } from "./rules/impact";
 import { runVerbsRule } from "./rules/verbs";
 import { runLengthRule } from "./rules/length";
 import { runAtsRule } from "./rules/ats";
 import { runLanguageRule } from "./rules/language";
+import { runExperienceRule } from "./rules/experience";
+import { runSkillsRule } from "./rules/skills";
+import { runProfessionalismRule } from "./rules/professionalism";
 import { matchJobDescription } from "./match";
 import { extractBullets, wordCount, estimatePages, unique } from "./text";
 import { sortRecommendations } from "./lexicon";
@@ -16,6 +19,19 @@ export function gradeFor(score: number): string {
   if (score >= 60) return "D";
   return "F";
 }
+
+/** Central weight map. Weights are relative; the engine normalizes them. */
+export const DIMENSION_WEIGHTS: Record<DimensionKey, number> = {
+  impact: 0.22,
+  structure: 0.16,
+  experience: 0.14,
+  skills: 0.12,
+  verbs: 0.1,
+  length: 0.1,
+  ats: 0.08,
+  language: 0.04,
+  professionalism: 0.04,
+};
 
 export interface AnalyzeOptions {
   /** Extracted page count, when a PDF supplied it. */
@@ -51,16 +67,22 @@ export function analyzeResume(
   }
 
   const dimensions: DimensionResult[] = [
-    runStructureRule(trimmed),
-    runImpactRule(trimmed),
-    runVerbsRule(trimmed),
-    runLengthRule(trimmed),
-    runAtsRule(trimmed),
-    runLanguageRule(trimmed),
-  ];
+  runStructureRule(trimmed),
+  runImpactRule(trimmed),
+  runVerbsRule(trimmed),
+  runLengthRule(trimmed),
+  runAtsRule(trimmed),
+  runLanguageRule(trimmed),
+  runExperienceRule(trimmed),
+  runSkillsRule(trimmed),
+  runProfessionalismRule(trimmed),
+].map((d) => ({
+  ...d,
+  weight: DIMENSION_WEIGHTS[d.key] ?? 0.05,
+}));
 
-  const weightTotal = dimensions.reduce((sum, d) => sum + d.weight, 0) || 1;
-  const weighted = dimensions.reduce((sum, d) => sum + d.score * d.weight, 0) / weightTotal;
+  const weightTotal = dimensions.reduce((sum, d) => sum + (d.weight ?? 0), 0) || 1;
+  const weighted = dimensions.reduce((sum, d) => sum + d.score * (d.weight ?? 0), 0) / weightTotal;
   const score = Math.round(weighted);
 
   const match = matchJobDescription(trimmed, req.jobDescription);

@@ -74,7 +74,6 @@ export function runLengthRule(text: string): DimensionResult {
     key: "length",
     label: "Length & density",
     score,
-    weight: 0.15,
     summary: `~${wc} words (~${pages} page(s)), ${avgBulletWords.toFixed(0)} words per bullet.`,
     findings,
     recommendations,

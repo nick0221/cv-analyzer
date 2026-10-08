@@ -127,7 +127,6 @@ export function runLanguageRule(text: string): DimensionResult {
     key: "language",
     label: "Language & typos",
     score,
-    weight: 0.15,
     summary,
     findings,
     recommendations,

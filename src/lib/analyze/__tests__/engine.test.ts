@@ -61,7 +61,7 @@ describe("analyzeResume", () => {
 
   it("returns every dimension and a well-formed result", () => {
     const result = analyzeResume(STRONG_RESUME);
-    expect(result.dimensions).toHaveLength(6);
+    expect(result.dimensions).toHaveLength(9);
     expect(result.bulletCount).toBeGreaterThan(0);
     expect(result.grade).toBe(gradeFor(result.score));
     for (const d of result.dimensions) {
