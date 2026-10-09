@@ -79,4 +79,20 @@ describe("AI enhancement wiring in the route", () => {
     const body = await res.json();
     expect(body.warnings.join(" ")).toMatch(/could not be reached/i);
   });
+
+  it("says plainly when AI was requested but the deployment has no key", async () => {
+    // Simulate a deployment with no provider configured.
+    const saved = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    try {
+      const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.4"));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.enhanced).toBeFalsy();
+      // Must not be a silent no-op.
+      expect(body.warnings.join(" ")).toMatch(/not configured/i);
+    } finally {
+      if (saved !== undefined) process.env.OPENAI_API_KEY = saved;
+    }
+  });
 });

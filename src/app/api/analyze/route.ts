@@ -138,6 +138,12 @@ export async function POST(req: NextRequest) {
         }),
       );
     }
+  } else if (wantsAi) {
+    // Opted in, but this deployment has no AI provider configured. Say so
+    // plainly rather than silently returning the deterministic analysis.
+    result.warnings.push(
+      "AI enhancement is not configured on this deployment (no OPENAI_API_KEY), so the standard analysis was used.",
+    );
   }
 
   /** Turn an enhancement failure into one actionable user-facing line. */
