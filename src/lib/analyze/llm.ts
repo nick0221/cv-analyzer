@@ -245,11 +245,13 @@ export async function enhanceAnalysis(
 
   const model = opts.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
   const rawBaseUrl = opts.baseUrl ?? process.env.OPENAI_BASE_URL ?? "";
-  // Provider compatibility: Anthropic/Vercel endpoints often end in /v1 or /v1/;
-  // OpenAI's /chat/completions sits directly under the versioned root.
+  // Normalize to a bare origin/root, then append the versioned path once.
+  // Providers differ: OpenAI/Groq want <root>/v1/chat/completions, and some
+  // users paste a root that already ends in /v1 — strip that so we never emit
+  // a doubled /v1/v1.
   const baseUrl = rawBaseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
 
-  const url = `${baseUrl || "https://api.openai.com/v1"}/v1/chat/completions`;
+  const url = `${baseUrl || "https://api.openai.com"}/v1/chat/completions`;
   const jobDescription = opts.jobDescription ?? "";
   const bullets = unquantifiedBullets(text);
   const payload = `${buildInstruction(Boolean(jobDescription))}\nInput: ${JSON.stringify(buildPayload(result, text, jobDescription))}`;

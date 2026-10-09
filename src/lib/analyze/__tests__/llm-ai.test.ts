@@ -143,6 +143,43 @@ describe("provider compatibility (Groq / gpt-oss)", () => {
   });
 });
 
+describe("endpoint URL construction", () => {
+  /** Capture the URL the app calls. */
+  function captureUrl(): () => string {
+    let url = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (u: string) => {
+        url = String(u);
+        return new Response(
+          JSON.stringify({ model: "m", choices: [{ message: { content: "{}" } }] }),
+          { status: 200 },
+        );
+      }),
+    );
+    return () => url;
+  }
+
+  const cases: Array<[string | undefined, string]> = [
+    // No base URL -> default OpenAI root, exactly one /v1.
+    [undefined, "https://api.openai.com/v1/chat/completions"],
+    ["https://api.openai.com/v1", "https://api.openai.com/v1/chat/completions"],
+    ["https://api.openai.com/v1/", "https://api.openai.com/v1/chat/completions"],
+    ["https://api.groq.com/openai", "https://api.groq.com/openai/v1/chat/completions"],
+    ["https://api.groq.com/openai/v1", "https://api.groq.com/openai/v1/chat/completions"],
+  ];
+
+  for (const [base, expected] of cases) {
+    it(`builds ${expected} from baseUrl=${base ?? "(unset)"}`, async () => {
+      const getUrl = captureUrl();
+      await enhanceAnalysis(baseResult(), RESUME, { apiKey: "test", baseUrl: base });
+      const url = getUrl();
+      expect(url).toBe(expected);
+      expect(url).not.toMatch(/\/v1\/v1\//); // the doubled-version bug
+    });
+  }
+});
+
 describe("the request payload actually carries the bullets", () => {
   /** Capture the user message the app sends, parsed out of the request body. */
   function captureUserMessage(): () => string {
