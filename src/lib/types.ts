@@ -9,7 +9,8 @@ export type DimensionKey =
   | "language"
   | "experience"
   | "skills"
-  | "professionalism";
+  | "professionalism"
+  | "contact";
 
 export interface Recommendation {
   priority: Priority;
@@ -36,10 +37,16 @@ export interface DimensionResult {
 
 export interface MatchResult {
   provided: boolean;
-  /** 0-100, 0 when no job description was supplied. */
+  /** 0-100 */
   score: number;
   keywordsFound: string[];
   keywordsMissing: string[];
+  /** Terms the JD marks as required (must/essential/need) that are missing. */
+  mustHaveMissing: string[];
+  /** Required terms that are present. */
+  mustHaveFound: string[];
+  /** Missing-but-actually-present keywords that sit deep/late in the resume. */
+  buriedKeywords: string[];
   recommendations: Recommendation[];
 }
 

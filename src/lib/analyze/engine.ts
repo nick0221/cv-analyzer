@@ -8,6 +8,7 @@ import { runLanguageRule } from "./rules/language";
 import { runExperienceRule } from "./rules/experience";
 import { runSkillsRule } from "./rules/skills";
 import { runProfessionalismRule } from "./rules/professionalism";
+import { runContactRule } from "./rules/contact";
 import { matchJobDescription } from "./match";
 import { extractBullets, wordCount, estimatePages, unique } from "./text";
 import { sortRecommendations } from "./lexicon";
@@ -31,6 +32,7 @@ export const DIMENSION_WEIGHTS: Record<DimensionKey, number> = {
   ats: 0.08,
   language: 0.04,
   professionalism: 0.04,
+  contact: 0.08,
 };
 
 export interface AnalyzeOptions {
@@ -61,7 +63,7 @@ export function analyzeResume(
       estimatedPages: 0,
       dimensions: [],
       recommendations: [],
-      match: { provided: false, score: 0, keywordsFound: [], keywordsMissing: [], recommendations: [] },
+      match: { provided: false, score: 0, keywordsFound: [], keywordsMissing: [], mustHaveFound: [], mustHaveMissing: [], buriedKeywords: [], recommendations: [] },
       warnings: ["No text to analyze."],
     };
   }
@@ -76,6 +78,7 @@ export function analyzeResume(
   runExperienceRule(trimmed),
   runSkillsRule(trimmed),
   runProfessionalismRule(trimmed),
+  runContactRule(trimmed),
 ].map((d) => ({
   ...d,
   weight: DIMENSION_WEIGHTS[d.key] ?? 0.05,

@@ -269,6 +269,12 @@ export default function Home() {
                 <span className="text-sm font-semibold text-zinc-300">{result.match.score}%</span>
               </div>
               <div className="mt-3 space-y-2 text-sm">
+                {result.match.mustHaveMissing.length > 0 && (
+                  <p className="text-zinc-400">
+                    <span className="font-medium text-orange-400">Required but missing ({result.match.mustHaveMissing.length}): </span>
+                    {result.match.mustHaveMissing.join(", ")}
+                  </p>
+                )}
                 <p className="text-zinc-400">
                   <span className="font-medium text-emerald-400">Matched ({result.match.keywordsFound.length}): </span>
                   {result.match.keywordsFound.join(", ") || "none"}
@@ -277,6 +283,12 @@ export default function Home() {
                   <span className="font-medium text-rose-400">Missing ({result.match.keywordsMissing.length}): </span>
                   {result.match.keywordsMissing.join(", ") || "none"}
                 </p>
+                {result.match.buriedKeywords.length > 0 && (
+                  <p className="text-zinc-400">
+                    <span className="font-medium text-amber-400">Buried after Experience ({result.match.buriedKeywords.length}): </span>
+                    {result.match.buriedKeywords.join(", ")}
+                  </p>
+                )}
               </div>
             </div>
           )}

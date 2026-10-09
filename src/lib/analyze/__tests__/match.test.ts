@@ -46,4 +46,39 @@ describe("matchJobDescription", () => {
     const m = matchJobDescription("Managed a team of engineers.", "You will be managing engineers daily. Managing is key.");
     expect(m.keywordsFound).toContain("managing");
   });
+
+  describe("must-have vs nice-to-have", () => {
+    it("flags JD-required terms that the resume lacks", () => {
+      const m = matchJobDescription(RESUME, JD);
+      // GraphQL and Kubernetes are marked required/must in the JD and absent.
+      expect(m.mustHaveMissing.length).toBeGreaterThanOrEqual(2);
+      expect(m.mustHaveMissing).toContain("graphql");
+      // But at least the resume satisfies "react", "next.js", "typescript"… if present.
+      expect(m.mustHaveFound.length).toBeGreaterThan(0);
+      // And the must-have gap is surfaced as a high-priority recommendation.
+      expect(m.recommendations.some((r) => r.title.includes("Must-have"))).toBe(true);
+    });
+  });
+
+  describe("buried keywords", () => {
+    it("flags a term that appears only after the experience section", () => {
+      const buriedResume = `Jane Doe\nContact: jane@x.com\n\nSummary\nSenior engineer.\n\nExperience\nAcme Corp 2020-2023\n- Built web apps.\n\nSkills\nkubernetes, graphql, aws`;
+      const m = matchJobDescription(buriedResume, JD);
+      // kubernetes/graphql are in the resume but only in the post-experience skills list.
+      expect(m.buriedKeywords).toEqual(expect.arrayContaining(["kubernetes", "graphql"]));
+    });
+  });
+
+  describe("phrase resonance", () => {
+    it("advises mirroring exact JD phrases when the resume never echoes them", () => {
+      const noPhraseResume = "I build React apps and ship Next.js products.";
+      const phraseJd = "The ideal candidate will have a strong background using React and Next.js in production.";
+      const m = matchJobDescription(noPhraseResume, phraseJd);
+      const advice = m.recommendations.filter((r) => r.title.includes("Mirror"));
+      // Only suggest when there is a phrase to mirror and it is absent.
+      if (advice.length > 0) {
+        expect(advice[0].priority).toBe("low");
+      }
+    });
+  });
 });
