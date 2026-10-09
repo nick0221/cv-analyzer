@@ -1,19 +1,24 @@
 @import "tailwindcss";
 
+/* ── Design tokens: Vercel-precision light system ───────────────────────── */
 :root {
-  --background: #09090b;
-  --foreground: #ededed;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+  --bg: #ffffff;
+  --ink: #171717; /* Vercel black — primary text, not pure #000 */
+  --ink-soft: #4d4d4d; /* gray 600 — secondary */
+  --ink-muted: #808080; /* gray 400 — placeholder, hints */
+  --line: rgba(0, 0, 0, 0.08); /* shadow-as-border base */
+  --line-strong: rgba(0, 0, 0, 0.12);
+  --accent: #0072f5; /* link blue */
+  --ship: #ff5b4f; /* workflow red — used only for danger/badges */
+  --preview: #de1d8d;
+  --develop: #0a72ef;
+  --ok: #067647; /* restrained success green */
+  --warn: #b54708;
+  --focus: hsla(212, 100%, 48%, 1);
+  --card: #ffffff;
+  --card-shadow:
+    rgba(0, 0, 0, 0.08) 0px 0px 0px 1px,
+    rgba(0, 0, 0, 0.04) 0px 2px 2px,
+    rgba(0, 0, 0, 0.04) 0px 8px 8px -8px,
+    #fafafa 0px 0px 0px 1px;
 }

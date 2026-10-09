@@ -16,23 +16,24 @@ export function ConsentBanner({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-800 bg-zinc-900/95 px-5 py-4 backdrop-blur">
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-zinc-300">
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#ebebeb] bg-white/95 px-5 py-4 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[13px] leading-relaxed text-[#4d4d4d]">
           This app analyzes the resume/CV you upload or paste — including its content — to score it
-          and recommend improvements. Your data is used for that analysis only and is not stored or
-          shared. Choose an option below; you can also tick the consent box in the form.
+          and recommend improvements. Your data is used for that analysis only and is{" "}
+          <span className="font-medium text-[#171717]">not stored or shared</span>. Choose an option
+          below; you can also tick the consent box in the form.
         </p>
         <div className="flex shrink-0 gap-2">
           <button
             onClick={onDecline}
-            className="rounded-lg border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-400 hover:text-zinc-100"
+            className="rounded-md border border-[#e2e2e2] px-3.5 py-2 text-[13px] font-medium text-[#4d4d4d] transition-colors hover:border-[#b0b0b0] hover:text-[#171717]"
           >
             Decline
           </button>
           <button
             onClick={onAccept}
-            className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-400"
+            className="rounded-md bg-[#171717] px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-black"
           >
             Accept &amp; continue
           </button>

@@ -17,17 +17,18 @@ import {
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
+const KBD = "font-mono text-[11px] text-[#808080]";
+
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+  const [mode, setMode] = useState<"file" | "paste">("file");
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  // Opt-in to the (optional) AI-powered rewrite of the feedback text.
   const [useAI, setUseAI] = useState(false);
-  // Declining the banner hides it for this session (without accepting).
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const consent = useSyncExternalStore(
     subscribeConsent,
@@ -58,7 +59,7 @@ export default function Home() {
     }
     setError(null);
     setFile(f);
-    // Coarse funnel signal only — never the filename or contents.
+    setMode("file");
     track("resume_uploaded", { kind: f.name.split(".").pop()?.toLowerCase() ?? "unknown" });
   }, []);
 
@@ -89,6 +90,7 @@ export default function Home() {
       }
       const parsed = data as AnalysisResult;
       setResult(parsed);
+      setLoading(false);
       track("resume_analyzed", {
         score: Math.round(parsed.score),
         grade: parsed.grade,
@@ -112,137 +114,250 @@ export default function Home() {
     if (inputRef.current) inputRef.current.value = "";
   }
 
+  const hasInput = Boolean(file || text.trim());
+
   return (
-    <main className="mx-auto w-full max-w-3xl px-5 py-12">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-50">Resume Quality Analyzer</h1>
-        <p className="mt-2 text-zinc-400">
-          Upload your resume to get a quality score, a breakdown by dimension, and prioritized fixes.
-        </p>
+    <main className="mx-auto w-full max-w-[1080px] px-5 pb-24 pt-10 sm:px-8">
+      {/* ── Masthead ─────────────────────────────────────────────────────── */}
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-[#171717] font-mono text-[12px] font-medium text-white">
+            CV
+          </span>
+          <span className="text-[15px] font-medium tracking-[-0.32px] text-[#171717]">
+            cv-analyzer
+          </span>
+        </div>
+        <span className={`${KBD} hidden sm:block`}>
+          server-side · nothing stored
+        </span>
       </header>
 
-      <section className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-        <div>
-          <label htmlFor="resume-file" className="mb-2 block text-sm font-medium text-zinc-300">Resume file (PDF, DOCX or TXT)</label>
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              onPick(e.dataTransfer.files?.[0] ?? null);
-            }}
-            className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
-              dragging ? "border-sky-400 bg-sky-400/5" : "border-zinc-700"
-            }`}
-          >
-            <input
-              id="resume-file"
-              ref={inputRef}
-              type="file"
-              accept=".pdf,.docx,.txt,.md"
-              className="sr-only"
-              aria-describedby="resume-file-hint"
-              onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-            />
-            {file ? (
-              <p className="text-sm text-zinc-200">
-                Selected: <span className="font-medium">{file.name}</span> ({(file.size / 1024).toFixed(0)} KB)
-              </p>
-            ) : (
-              <>
-                <p className="text-sm text-zinc-300">Drag &amp; drop your resume here</p>
-                <label
-                  htmlFor="resume-file"
-                  className="mt-2 cursor-pointer rounded-lg border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-100 hover:border-zinc-400 hover:bg-zinc-800/60 focus-within:outline-none"
+      <section className="mt-16 max-w-2xl">
+        <p className="font-mono text-[12px] uppercase tracking-[0.14em] text-[#808080]">
+          resume quality analyzer
+        </p>
+        <h1 className="mt-3 text-[44px] font-semibold leading-[1.05] tracking-[-2.4px] text-[#171717]">
+          Get a score. Get the fixes.
+        </h1>
+        <p className="mt-4 max-w-[560px] text-[17px] leading-relaxed text-[#4d4d4d]">
+          Upload or paste a resume and the analyzer scores it across 10 dimensions, then tells
+          you exactly what to change and how.
+        </p>
+        <div className="mt-5 flex items-center gap-3">
+          <div className="flex h-6 items-center gap-1.5 rounded-full bg-[#f0f4ff] px-2.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#0a5fd0]" />
+            <span className="font-mono text-[11px] font-medium text-[#0a5fd0]">10 dimensions</span>
+          </div>
+          <div className="flex h-6 items-center gap-1.5 rounded-full bg-[#f5fbf7] px-2.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#067647]" />
+            <span className="font-mono text-[11px] font-medium text-[#067647]">0 data stored</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Workbench ────────────────────────────────────────────────────── */}
+      <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_360px]">
+        {/* Left column: input */}
+        <div className="space-y-4">
+          <div className="rounded-lg bg-white p-5 shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px]">
+            {/* Mode switch */}
+            <div className="flex w-fit items-center gap-1 rounded-md bg-[#f5f5f5] p-1">
+              {(["file", "paste"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`rounded px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                    mode === m
+                      ? "bg-white text-[#171717] shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px]"
+                      : "text-[#808080] hover:text-[#171717]"
+                  }`}
                 >
-                  Choose a file
+                  {m === "file" ? "Upload file" : "Paste text"}
+                </button>
+              ))}
+            </div>
+
+            {mode === "file" ? (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  onPick(e.dataTransfer.files?.[0] ?? null);
+                }}
+                className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-6 py-10 text-center transition-colors ${
+                  dragging ? "border-[#0072f5] bg-[#f0f4ff]" : "border-[#d4d4d4] hover:border-[#b0b0b0]"
+                }`}
+              >
+                <input
+                  id="resume-file"
+                  ref={inputRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt,.md"
+                  className="sr-only"
+                  aria-describedby="resume-file-hint"
+                  onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+                />
+                {file ? (
+                  <div className="text-center">
+                    <p className="font-mono text-[13px] font-medium text-[#171717]">
+                      {file.name}
+                    </p>
+                    <p className="mt-1 font-mono text-[12px] text-[#808080]">
+                      {(file.size / 1024).toFixed(0)} KB
+                    </p>
+                    <label
+                      htmlFor="resume-file"
+                      className="mt-3 inline-block cursor-pointer rounded-md border border-[#e2e2e2] px-3 py-1.5 text-[13px] font-medium text-[#4d4d4d] transition-colors hover:border-[#b0b0b0] hover:text-[#171717]"
+                    >
+                      Replace file
+                    </label>
+                  </div>
+                ) : (
+                  <>
+                    <label
+                      htmlFor="resume-file"
+                      className="cursor-pointer rounded-md bg-[#171717] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-black"
+                    >
+                      Choose a file
+                    </label>
+                    <p className="mt-3 text-[13px] text-[#808080]">or drag it here</p>
+                    <p id="resume-file-hint" className="mt-1 font-mono text-[11px] text-[#b0b0b0]">
+                      PDF · DOCX · TXT — max 10 MB
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <textarea
+                id="resume-text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={7}
+                placeholder={"Paste your resume text here…\n\nTip: use this for scanned PDFs that can't be read directly."}
+                className="mt-4 w-full resize-y rounded-lg border border-[#e2e2e2] bg-white px-3.5 py-3 font-mono text-[13px] leading-relaxed text-[#171717] placeholder:text-[#b0b0b0] focus:border-[#0072f5] focus:outline-none focus:ring-2 focus:ring-[#c7dafe]"
+              />
+            )}
+
+            {/* Job description */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between">
+                <label htmlFor="job-description" className="text-[13px] font-medium text-[#171717]">
+                  Target job description
                 </label>
-                <p id="resume-file-hint" className="mt-2 text-xs text-zinc-500">
-                  Text-based PDF, DOCX, TXT — max 10 MB
-                </p>
-              </>
+                <span className="font-mono text-[11px] text-[#b0b0b0]">optional</span>
+              </div>
+              <textarea
+                id="job-description"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                rows={3}
+                placeholder="Paste the job posting to see which keywords your resume is missing."
+                className="mt-2 w-full resize-y rounded-lg border border-[#e2e2e2] bg-white px-3.5 py-3 font-mono text-[13px] leading-relaxed text-[#171717] placeholder:text-[#b0b0b0] focus:border-[#0072f5] focus:outline-none focus:ring-2 focus:ring-[#c7dafe]"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md border border-[#f4c7c3] bg-[#fef3f2] px-3.5 py-2.5 text-[13px] font-medium text-[#b42318]"
+            >
+              {error}
+            </p>
+          )}
+
+          {/* Consent + AI toggles */}
+          <div className="space-y-2.5">
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[#ebebeb] bg-white p-3.5 transition-colors hover:border-[#d4d4d4]">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => onConsentToggle(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#0072f5]"
+              />
+              <span className="text-[13px] leading-relaxed text-[#4d4d4d]">
+                I agree that my resume/CV content will be sent to and analyzed by this app to produce
+                a quality score and recommendations. It is processed for this purpose only and not
+                stored.
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[#ebebeb] bg-white p-3.5 transition-colors hover:border-[#d4d4d4]">
+              <input
+                type="checkbox"
+                checked={useAI}
+                onChange={(e) => setUseAI(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#0072f5]"
+              />
+              <span className="text-[13px] leading-relaxed text-[#4d4d4d]">
+                <span className="font-medium text-[#171717]">Improve wording with AI</span>{" "}
+                <span className="font-mono text-[11px] text-[#b0b0b0]">optional</span> — sends the
+                resume text and findings to a third-party LLM to rewrite the feedback more
+                specifically. Leave off to keep everything on this server; the score is identical
+                either way.
+              </span>
+            </label>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={analyze}
+              disabled={loading || !consent}
+              className="rounded-md bg-[#171717] px-5 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {loading ? "Analyzing…" : "Analyze resume"}
+            </button>
+            {hasInput && (
+              <button
+                onClick={reset}
+                className="text-[13px] font-medium text-[#808080] transition-colors hover:text-[#171717]"
+              >
+                Reset
+              </button>
+            )}
+            {loading && (
+              <span className="font-mono text-[12px] text-[#b0b0b0]">
+                parsing → scoring → ranking…
+              </span>
             )}
           </div>
         </div>
 
-        <div>
-          <label htmlFor="resume-text" className="mb-2 block text-sm font-medium text-zinc-300">
-            …or paste the resume text
-          </label>
-          <textarea
-            id="resume-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={5}
-            placeholder="Paste your resume text here (use this for scanned PDFs)."
-            className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="job-description" className="mb-2 block text-sm font-medium text-zinc-300">
-            Target job description <span className="text-zinc-500">(optional — adds keyword matching)</span>
-          </label>
-          <textarea
-            id="job-description"
-            value={jobDescription}
-            onChange={(e) => setJobDescription(e.target.value)}
-            rows={4}
-            placeholder="Paste the job posting to see which keywords your resume is missing."
-            className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500 focus:outline-none"
-          />
-        </div>
-
-        {error && (
-          <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>
-        )}
-
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => onConsentToggle(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-sky-500"
-          />
-          <span className="text-sm text-zinc-300">
-            I agree that my resume/CV content will be sent to and analyzed by this app to produce a
-            quality score and recommendations. It is processed for this purpose only and not stored.
-          </span>
-        </label>
-
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
-          <input
-            type="checkbox"
-            checked={useAI}
-            onChange={(e) => setUseAI(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-sky-500"
-          />
-          <span className="text-sm text-zinc-300">
-            <span className="font-medium text-zinc-200">Improve wording with AI</span>{" "}
-            <span className="text-zinc-500">(optional)</span> — sends the resume text and the
-            findings to a third-party LLM to rewrite the feedback more specifically. Leave off to
-            keep everything on this server; the score is identical either way.
-          </span>
-        </label>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={analyze}
-            disabled={loading || !consent}
-            className="rounded-xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading ? "Analyzing…" : "Analyze resume"}
-          </button>
-          {(file || text || result) && (
-            <button onClick={reset} className="text-sm text-zinc-400 hover:text-zinc-200">Reset</button>
-          )}
-        </div>
+        {/* Right column: rubric card */}
+        <aside className="h-fit rounded-lg border border-[#ebebeb] bg-white p-5">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-[15px] font-medium tracking-[-0.32px] text-[#171717]">What&amp;s scored</h2>
+            <span className="font-mono text-[11px] text-[#b0b0b0]">10 dims</span>
+          </div>
+          <ul className="mt-4 space-y-3">
+            {RUBRIC.map((r) => (
+              <li key={r.label} className="flex items-center gap-3">
+                <span className={`w-8 shrink-0 text-right font-mono text-[12px] tabular-nums ${r.hot ? "font-medium text-[#171717]" : "text-[#b0b0b0]"}`}>
+                  {r.weight}%
+                </span>
+                <span className="h-1 flex-1 rounded-full bg-[#f0f0f0]">
+                  <span className="block h-full rounded-full bg-[#d4d4d4]" style={{ width: `${r.weight}%` }} />
+                </span>
+                <span className="w-36 shrink-0 text-[13px] text-[#4d4d4d]">{r.label}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-5 border-t border-[#f0f0f0] pt-3 font-mono text-[11px] leading-relaxed text-[#b0b0b0]">
+            Weights are the actual scoring engine — impact and structure carry the most.
+          </p>
+        </aside>
       </section>
 
+      {/* ── Results ──────────────────────────────────────────────────────── */}
       {result && (
         <section
-          className="mt-8 space-y-6"
+          className="mt-16 space-y-8"
           aria-live="polite"
           aria-label="Analysis results"
         >
@@ -251,17 +366,21 @@ export default function Home() {
             {result.recommendations.length} recommendation
             {result.recommendations.length === 1 ? "" : "s"}.
           </p>
+
           {result.warnings.length > 0 && (
-            <div className="space-y-1 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <div className="space-y-1 rounded-lg border border-[#f2ddc0] bg-[#fff8ed] p-4">
               {result.warnings.map((w, i) => (
-                <p key={i} className="text-sm text-amber-200">⚠ {w}</p>
+                <p key={i} className="text-[13px] text-[#b54708]">
+                  <span className="font-mono">⚠</span> {w}
+                </p>
               ))}
             </div>
           )}
 
-          <div className="flex flex-col items-center gap-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 sm:flex-row sm:items-center">
+          {/* Header: gauge + headline stats */}
+          <div className="flex flex-col items-center gap-6 rounded-lg bg-white p-6 shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px] sm:flex-row sm:items-center">
             <ScoreGauge score={result.score} grade={result.grade} />
-            <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+            <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
               <Stat label="Words" value={result.wordCount.toLocaleString()} />
               <Stat label="Bullets" value={result.bulletCount} />
               <Stat label="Est. pages" value={result.estimatedPages} />
@@ -272,56 +391,90 @@ export default function Home() {
           </div>
 
           {result.enhanced && (
-            <p className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
-              ✨ Feedback wording improved by AI{result.enhancedModel ? ` (${result.enhancedModel})` : ""}.
-              {result.enhancedSummary ? ` ${result.enhancedSummary}` : ""}
+            <p className="rounded-md border border-[#e6d5f2] bg-[#fbf5ff] px-3.5 py-2.5 text-[13px] text-[#7a3cae]">
+              Feedback wording improved by AI
+              {result.enhancedModel ? (
+                <span className="font-mono text-[11px]"> ({result.enhancedModel})</span>
+              ) : null}
+              {result.enhancedSummary ? ` — ${result.enhancedSummary}` : ""}
             </p>
           )}
 
+          {/* Score breakdown */}
           <div>
-            <h2 className="mb-3 text-lg font-semibold text-zinc-100">Score breakdown</h2>
+            <h2 className="mb-3 flex items-baseline justify-between">
+              <span className="text-[20px] font-semibold tracking-[-0.96px] text-[#171717]">Score breakdown</span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#b0b0b0]">by dimension</span>
+            </h2>
             <div className="grid gap-3 sm:grid-cols-2">
               {result.dimensions.map((d) => (
-                <DimensionBar key={d.key} label={d.label} score={d.score} summary={d.summary} findings={d.findings} />
+                <DimensionBar
+                  key={d.key}
+                  label={d.label}
+                  score={d.score}
+                  summary={d.summary}
+                  findings={d.findings}
+                />
               ))}
             </div>
           </div>
 
+          {/* JD match */}
           {result.match.provided && (
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+            <div className="rounded-lg bg-white p-5 shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px]">
               <div className="flex items-baseline justify-between">
-                <h2 className="text-lg font-semibold text-zinc-100">Job description match</h2>
-                <span className="text-sm font-semibold text-zinc-300">{result.match.score}%</span>
+                <h2 className="text-[20px] font-semibold tracking-[-0.96px] text-[#171717]">
+                  Job description match
+                </h2>
+                <span className="font-mono text-[20px] font-semibold tabular-nums text-[#171717]">
+                  {result.match.score}%
+                </span>
               </div>
-              <div className="mt-3 space-y-2 text-sm">
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {result.match.mustHaveMissing.length > 0 && (
-                  <p className="text-zinc-400">
-                    <span className="font-medium text-orange-400">Required but missing ({result.match.mustHaveMissing.length}): </span>
-                    {result.match.mustHaveMissing.join(", ")}
+                  <p className="text-[13px] leading-relaxed text-[#4d4d4d]">
+                    <span className="font-medium text-[#b42318]">Required but missing ({result.match.mustHaveMissing.length})</span>
+                    <span className="mt-0.5 block font-mono text-[12.5px] text-[#b42318]">
+                      {result.match.mustHaveMissing.join(", ")}
+                    </span>
                   </p>
                 )}
-                <p className="text-zinc-400">
-                  <span className="font-medium text-emerald-400">Matched ({result.match.keywordsFound.length}): </span>
-                  {result.match.keywordsFound.join(", ") || "none"}
+                <p className="text-[13px] leading-relaxed text-[#4d4d4d]">
+                  <span className="font-medium text-[#067647]">Matched ({result.match.keywordsFound.length})</span>
+                  <span className="mt-0.5 block font-mono text-[12.5px] text-[#067647]">
+                    {result.match.keywordsFound.join(", ") || "—"}
+                  </span>
                 </p>
-                <p className="text-zinc-400">
-                  <span className="font-medium text-rose-400">Missing ({result.match.keywordsMissing.length}): </span>
-                  {result.match.keywordsMissing.join(", ") || "none"}
+                <p className="text-[13px] leading-relaxed text-[#4d4d4d]">
+                  <span className="font-medium text-[#808080]">Missing ({result.match.keywordsMissing.length})</span>
+                  <span className="mt-0.5 block font-mono text-[12.5px] text-[#808080]">
+                    {result.match.keywordsMissing.join(", ") || "—"}
+                  </span>
                 </p>
                 {result.match.buriedKeywords.length > 0 && (
-                  <p className="text-zinc-400">
-                    <span className="font-medium text-amber-400">Buried after Experience ({result.match.buriedKeywords.length}): </span>
-                    {result.match.buriedKeywords.join(", ")}
+                  <p className="text-[13px] leading-relaxed text-[#4d4d4d]">
+                    <span className="font-medium text-[#b54708]">Buried after Experience ({result.match.buriedKeywords.length})</span>
+                    <span className="mt-0.5 block font-mono text-[12.5px] text-[#b54708]">
+                      {result.match.buriedKeywords.join(", ")}
+                    </span>
                   </p>
                 )}
               </div>
             </div>
           )}
 
+          {/* Recommendations */}
           <div>
-            <h2 className="mb-3 text-lg font-semibold text-zinc-100">Recommendations</h2>
+            <h2 className="mb-3 flex items-baseline justify-between">
+              <span className="text-[20px] font-semibold tracking-[-0.96px] text-[#171717]">Recommendations</span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#b0b0b0]">
+                {result.recommendations.length} fix{result.recommendations.length === 1 ? "" : "es"}
+              </span>
+            </h2>
             {result.recommendations.length === 0 ? (
-              <p className="text-sm text-zinc-400">No issues found — the resume looks solid.</p>
+              <p className="rounded-lg border border-[#ebebeb] bg-white p-5 text-[14px] text-[#4d4d4d]">
+                No issues found — the resume looks solid.
+              </p>
             ) : (
               <div className="space-y-3">
                 {result.recommendations.map((rec, i) => (
@@ -333,10 +486,14 @@ export default function Home() {
         </section>
       )}
 
-      <footer className="mt-12 border-t border-zinc-800 pt-6 text-xs text-zinc-500">
-        Analysis runs on the server and is not stored. Recommendations are heuristic — always use your own judgement.
-        {result && (
-          <div className="mt-2">
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
+      <footer className="mt-20 border-t border-[#ebebeb] pt-6 text-[13px] leading-relaxed text-[#808080]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p>
+            Analysis runs on the server and is not stored. Recommendations are heuristic — always
+            use your own judgement.
+          </p>
+          {result && (
             <button
               onClick={async () => {
                 const { buildMarkdownReport } = await import("@/lib/report");
@@ -345,7 +502,6 @@ export default function Home() {
                   await navigator.clipboard.writeText(md);
                   setError(null);
                 } catch {
-                  // Fallback: prompt user to copy
                   const ta = document.createElement("textarea");
                   ta.value = md;
                   document.body.appendChild(ta);
@@ -353,7 +509,6 @@ export default function Home() {
                   document.execCommand("copy");
                   document.body.removeChild(ta);
                 }
-                // Simple transient feedback via button label
                 const el = document.activeElement as HTMLButtonElement | null;
                 if (el) {
                   const old = el.textContent;
@@ -363,12 +518,12 @@ export default function Home() {
                   }, 1200);
                 }
               }}
-              className="text-sky-400 hover:text-sky-300 underline"
+              className="rounded-md border border-[#e2e2e2] px-3 py-1.5 font-mono text-[12px] font-medium text-[#4d4d4d] transition-colors hover:border-[#b0b0b0] hover:text-[#171717]"
             >
               Copy report as Markdown
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </footer>
 
       <ConsentBanner
@@ -380,11 +535,24 @@ export default function Home() {
   );
 }
 
+const RUBRIC = [
+  { label: "Impact", weight: 22, hot: true },
+  { label: "Structure", weight: 16, hot: true },
+  { label: "Experience", weight: 14, hot: true },
+  { label: "Skills", weight: 12 },
+  { label: "Verbs / Length", weight: 10 },
+  { label: "ATS / Contact", weight: 8 },
+  { label: "Language", weight: 4 },
+  { label: "Polish", weight: 4 },
+];
+
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="font-semibold text-zinc-100">{value}</div>
+      <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#b0b0b0]">{label}</div>
+      <div className="mt-0.5 font-mono text-[24px] font-medium tabular-nums tracking-[-0.96px] text-[#171717]">
+        {value}
+      </div>
     </div>
   );
 }
