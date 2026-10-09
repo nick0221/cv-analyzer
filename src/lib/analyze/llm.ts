@@ -56,6 +56,31 @@ function buildPayload(result: AnalysisResult, text: string) {
   };
 }
 
+function callChat(
+  url: string,
+  apiKey: string,
+  model: string,
+  payload: string,
+): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.2,
+      max_tokens: 1024,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: payload },
+      ],
+    }),
+  });
+}
+
 export async function enhanceAnalysis(
   result: AnalysisResult,
   text: string,
@@ -65,54 +90,50 @@ export async function enhanceAnalysis(
   if (!apiKey) return { enhanced: false };
 
   const model = opts.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-  const baseUrl = opts.baseUrl ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+  const rawBaseUrl = opts.baseUrl ?? process.env.OPENAI_BASE_URL ?? "";
+  // Provider compatibility: Anthropic/Vercel endpoints often end in /v1 or /v1/;
+  // OpenAI's /chat/completions sits directly under the versioned root.
+  const baseUrl = rawBaseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
 
+  const url = `${baseUrl || "https://api.openai.com/v1"}/v1/chat/completions`;
+  const payload = `Rephrase the feedback to be more specific and actionable. Keep priorities and dimensions unchanged. Return JSON with this shape: {"summary": string|null, "recommendations": [{"index": number, "title": string, "why": string, "fix": string}]}. Input: ${JSON.stringify(buildPayload(result, text))}`;
+
+  let response: Response;
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_tokens: 1024,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: `Rephrase the feedback to be more specific and actionable. Keep priorities and dimensions unchanged. Return JSON with this shape: {"summary": string|null, "recommendations": [{"index": number, "title": string, "why": string, "fix": string}]}. Input: ${JSON.stringify(buildPayload(result, text))}`,
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) return { enhanced: false };
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) return { enhanced: false };
-
-    const parsed = JSON.parse(content) as {
-      summary?: string | null;
-      recommendations?: Array<{
-        index: number;
-        title?: string;
-        why?: string;
-        fix?: string;
-      }>;
-    };
-
-    return {
-      enhanced: true,
-      model: data?.model ?? model,
-      summary: parsed.summary ?? undefined,
-      recommendations: parsed.recommendations?.filter((r) => typeof r.index === "number"),
-    };
+    response = await callChat(url, apiKey, model, payload);
   } catch {
     return { enhanced: false };
   }
+
+  if (!response.ok) return { enhanced: false };
+
+  let data: Record<string, unknown>;
+  try {
+    data = (await response.json()) as Record<string, unknown>;
+  } catch {
+    return { enhanced: false };
+  }
+
+  const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
+  const content = choices?.[0]?.message?.content;
+  if (!content) return { enhanced: false };
+
+  let parsed: {
+    summary?: string | null;
+    recommendations?: Array<{ index: number; title?: string; why?: string; fix?: string }>;
+  };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return { enhanced: false };
+  }
+
+  return {
+    enhanced: true,
+    model: (data?.model as string | undefined) ?? model,
+    summary: parsed.summary ?? undefined,
+    recommendations: parsed.recommendations?.filter((r) => typeof r.index === "number"),
+  };
 }
 
 /** Apply enhancement to a copy of result (returns new object). */
@@ -120,10 +141,11 @@ export function applyEnhancement(
   result: AnalysisResult,
   enhancement: EnhanceResult,
 ): AnalysisResult {
-  if (!enhancement.enhanced || !enhancement.recommendations?.length) return result;
+  // Nothing came back at all — leave the deterministic result untouched.
+  if (!enhancement.enhanced) return result;
 
   const recMap = new Map<number, { title?: string; why?: string; fix?: string }>();
-  for (const r of enhancement.recommendations) {
+  for (const r of enhancement.recommendations ?? []) {
     if (typeof r.index === "number") recMap.set(r.index, r);
   }
 
@@ -142,5 +164,8 @@ export function applyEnhancement(
   return {
     ...result,
     recommendations: enhancedRecs,
+    enhanced: true,
+    enhancedModel: enhancement.model,
+    enhancedSummary: enhancement.summary,
   };
 }

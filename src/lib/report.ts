@@ -13,7 +13,16 @@ export function buildMarkdownReport(result: AnalysisResult, opts: { filename?: s
   lines.push(`- Bullet points: ${result.bulletCount}`);
   lines.push(`- Estimated pages: ${result.estimatedPages}`);
   lines.push(`- Fixes: ${result.recommendations.length}`);
+  if (result.enhanced) {
+    lines.push(`- AI wording enhancement: yes${result.enhancedModel ? ` (${result.enhancedModel})` : ""}`);
+  }
   lines.push("");
+
+  if (result.enhancedSummary) {
+    lines.push(`## AI summary`);
+    lines.push(result.enhancedSummary);
+    lines.push("");
+  }
 
   if (result.warnings.length) {
     lines.push(`## Warnings`);
@@ -39,8 +48,15 @@ export function buildMarkdownReport(result: AnalysisResult, opts: { filename?: s
   if (result.match.provided) {
     lines.push(`## Job description match`);
     lines.push(`- Score: ${result.match.score}%`);
+    if (result.match.mustHaveMissing.length || result.match.mustHaveFound.length) {
+      lines.push(`- Required & matched (${result.match.mustHaveFound.length}): ${result.match.mustHaveFound.join(", ") || "none"}`);
+      lines.push(`- Required but missing (${result.match.mustHaveMissing.length}): ${result.match.mustHaveMissing.join(", ") || "none"}`);
+    }
     lines.push(`- Matched (${result.match.keywordsFound.length}): ${result.match.keywordsFound.join(", ") || "none"}`);
     lines.push(`- Missing (${result.match.keywordsMissing.length}): ${result.match.keywordsMissing.join(", ") || "none"}`);
+    if (result.match.buriedKeywords.length) {
+      lines.push(`- Buried after Experience (${result.match.buriedKeywords.length}): ${result.match.buriedKeywords.join(", ")}`);
+    }
     if (result.match.recommendations.length) {
       lines.push(`- Recommendations:`);
       for (const r of result.match.recommendations) lines.push(`  - [${r.priority.toUpperCase()}] ${r.title}`);

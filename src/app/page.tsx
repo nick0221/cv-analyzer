@@ -25,6 +25,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  // Opt-in to the (optional) AI-powered rewrite of the feedback text.
+  const [useAI, setUseAI] = useState(false);
   // Declining the banner hides it for this session (without accepting).
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const consent = useSyncExternalStore(
@@ -77,6 +79,7 @@ export default function Home() {
       if (file) fd.append("file", file);
       if (text.trim()) fd.append("text", text);
       if (jobDescription.trim()) fd.append("jobDescription", jobDescription);
+      if (useAI) fd.append("aiEnhance", "1");
       const res = await fetch("/api/analyze", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
@@ -208,6 +211,21 @@ export default function Home() {
           </span>
         </label>
 
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+          <input
+            type="checkbox"
+            checked={useAI}
+            onChange={(e) => setUseAI(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-sky-500"
+          />
+          <span className="text-sm text-zinc-300">
+            <span className="font-medium text-zinc-200">Improve wording with AI</span>{" "}
+            <span className="text-zinc-500">(optional)</span> — sends the resume text and the
+            findings to a third-party LLM to rewrite the feedback more specifically. Leave off to
+            keep everything on this server; the score is identical either way.
+          </span>
+        </label>
+
         <div className="flex items-center gap-3">
           <button
             onClick={analyze}
@@ -252,6 +270,13 @@ export default function Home() {
               {result.match.provided && <Stat label="JD match" value={`${result.match.score}%`} />}
             </div>
           </div>
+
+          {result.enhanced && (
+            <p className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-200">
+              ✨ Feedback wording improved by AI{result.enhancedModel ? ` (${result.enhancedModel})` : ""}.
+              {result.enhancedSummary ? ` ${result.enhancedSummary}` : ""}
+            </p>
+          )}
 
           <div>
             <h2 className="mb-3 text-lg font-semibold text-zinc-100">Score breakdown</h2>

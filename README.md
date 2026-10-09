@@ -33,6 +33,33 @@ npm run dev        # http://localhost:3000
 Open the app, upload a PDF/DOCX/TXT or paste the resume text, optionally paste a
 job description, and click **Analyze resume**.
 
+### Optional: AI wording enhancement
+
+The scoring is fully deterministic and runs locally on your server. There is an
+optional checkbox, *"Improve wording with AI"*, that sends the resume text plus
+the computed findings to an OpenAI-compatible endpoint to rewrite the feedback
+more specifically. It is **opt-in, off by default, and changes nothing about the
+score** — only the phrasing of the recommendations.
+
+Enable it by setting these environment variables (otherwise the checkbox is a
+silent no-op):
+
+```bash
+OPENAI_API_KEY=sk-...                 # required to turn the feature on
+OPENAI_MODEL=gpt-4o-mini              # optional, this is the default
+OPENAI_BASE_URL=https://api.openai.com   # optional; any OpenAI-compatible root
+```
+
+Because a resume is personal data, the request is only made when the user ticks
+the box, and a failure (bad key, rate limit, malformed response) degrades
+gracefully back to the deterministic analysis with a warning rather than an error.
+
+### Export
+
+After a run, *"Copy report as Markdown"* in the footer copies the full report
+(score, per-dimension findings, job-match, and all recommendations) to the
+clipboard, ready to paste into a doc or issue tracker.
+
 ### Scripts
 
 ```bash

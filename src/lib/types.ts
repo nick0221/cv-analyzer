@@ -61,6 +61,10 @@ export interface AnalysisResult {
   recommendations: Recommendation[];
   match: MatchResult;
   warnings: string[];
+  /** Present only when the optional LLM enhancement ran. */
+  enhanced?: boolean;
+  enhancedModel?: string;
+  enhancedSummary?: string;
 }
 
 export interface AnalyzeRequest {

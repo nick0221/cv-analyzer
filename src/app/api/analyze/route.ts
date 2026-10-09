@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractTextFromFile, UnsupportedFileError, MAX_UPLOAD_BYTES } from "@/lib/parse/extract";
 import { analyzeResume } from "@/lib/analyze/engine";
+import { enhanceAnalysis, applyEnhancement } from "@/lib/analyze/llm";
 import { checkRateLimit, clientKey } from "@/lib/rateLimit";
 
 // Give large PDFs room to parse on Vercel. (Node runtime is the default.)
@@ -108,7 +109,22 @@ export async function POST(req: NextRequest) {
   }
 
   const started = Date.now();
-  const result = analyzeResume(text, { jobDescription }, { pages, warnings });
+  let result = analyzeResume(text, { jobDescription }, { pages, warnings });
+
+  // Optional AI enhancement: only when the user opted in AND a key is configured.
+  const wantsAi = ["aiEnhance", "useAiEnhance"].some((k) => {
+    const v = formData.get(k);
+    return v === "1" || v === "true";
+  });
+  if (wantsAi && process.env.OPENAI_API_KEY) {
+    const enhancement = await enhanceAnalysis(result, text);
+    if (enhancement.enhanced) {
+      result = applyEnhancement(result, enhancement);
+    } else {
+      result.warnings.push("AI enhancement was requested but unavailable; showing the standard analysis.");
+    }
+  }
+
   // Structured log line — cheap observability without a vendor.
   console.log(
     JSON.stringify({
@@ -118,6 +134,7 @@ export async function POST(req: NextRequest) {
       score: result.score,
       dimensions: result.dimensions.length,
       recs: result.recommendations.length,
+      enhanced: Boolean(result.enhanced),
       rateRemaining: rl.remaining,
     }),
   );
