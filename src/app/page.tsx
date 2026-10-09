@@ -6,6 +6,8 @@ import type { AnalysisResult } from "@/lib/types";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { DimensionBar } from "@/components/DimensionBar";
 import { RecommendationCard } from "@/components/RecommendationCard";
+import { SecondOpinionCard } from "@/components/SecondOpinionCard";
+import { BulletRewriteCard } from "@/components/BulletRewriteCard";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import {
   getConsentSnapshot,
@@ -338,11 +340,11 @@ export default function Home() {
                 className="mt-0.5 h-4 w-4 shrink-0 accent-[#0072f5]"
               />
               <span className="text-[13px] leading-relaxed text-[#4d4d4d]">
-                <span className="font-medium text-[#171717]">Improve wording with AI</span>{" "}
+                <span className="font-medium text-[#171717]">AI enhancement</span>{" "}
                 <span className="font-mono text-[11px] text-[#b0b0b0]">optional</span> — sends the
-                resume text and findings to a third-party LLM to rewrite the feedback more
-                specifically. Leave off to keep everything on this server; the score is identical
-                either way.
+                resume text and findings to a third-party LLM to sharpen the feedback, rewrite your
+                weakest bullets as concrete before/after edits, and add a recruiter second opinion.
+                Leave off to keep everything on this server; the score is identical either way.
               </span>
             </label>
           </div>
@@ -463,6 +465,38 @@ export default function Home() {
               ) : null}
               {result.enhancedSummary ? ` — ${result.enhancedSummary}` : ""}
             </p>
+          )}
+
+          {/* AI bullet rewrites — the screenshot-worthy part, in the same diff style */}
+          {result.bulletRewrites && result.bulletRewrites.length > 0 && (
+            <div>
+              <h2 className="mb-3 flex items-baseline justify-between">
+                <span className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.96px] text-[#171717]">
+                  <span aria-hidden className="font-mono text-[15px] text-[#7a3cae]">◆</span>
+                  Rewritten bullets
+                </span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#b0b0b0]">
+                  {result.bulletRewrites.length} AI rewrite
+                  {result.bulletRewrites.length === 1 ? "" : "s"}
+                </span>
+              </h2>
+              <p className="mb-3 text-[13px] leading-relaxed text-[#808080]">
+                Your strongest bullets, restructured as{" "}
+                <span className="text-[#4d4d4d]">verb + action + measurable result</span>.
+                Placeholders like <span className="font-mono">[X%]</span> mark where only you
+                know the real number — never paste a guess.
+              </p>
+              <div className="space-y-3">
+                {result.bulletRewrites.map((r, i) => (
+                  <BulletRewriteCard key={i} rewrite={r} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI recruiter second opinion */}
+          {result.secondOpinion && (
+            <SecondOpinionCard opinion={result.secondOpinion} model={result.enhancedModel} />
           )}
 
           {/* Score breakdown */}

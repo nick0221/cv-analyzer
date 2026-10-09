@@ -24,6 +24,31 @@ export function buildMarkdownReport(result: AnalysisResult, opts: { filename?: s
     lines.push("");
   }
 
+  if (result.bulletRewrites && result.bulletRewrites.length) {
+    lines.push(`## Rewritten bullets (AI)`);
+    for (const r of result.bulletRewrites) {
+      lines.push(`- Before: ${r.original}`);
+      lines.push(`  After:  ${r.rewrite}`);
+      if (r.why) lines.push(`  Why:    ${r.why}`);
+    }
+    lines.push("");
+    lines.push(
+      `Placeholders like [X%] mark where only you know the real number — never paste a guess.`,
+    );
+    lines.push("");
+  }
+
+  if (result.secondOpinion) {
+    const o = result.secondOpinion;
+    lines.push(`## Recruiter second opinion (AI)${o.verdict ? ` — ${o.verdict}` : ""}`);
+    lines.push(o.summary);
+    for (const s of o.strengths) lines.push(`- + ${s}`);
+    for (const c of o.concerns) lines.push(`- − ${c}`);
+    lines.push("");
+    lines.push(`Advisory only — it does not change the score.`);
+    lines.push("");
+  }
+
   if (result.warnings.length) {
     lines.push(`## Warnings`);
     for (const w of result.warnings) lines.push(`- ${w}`);

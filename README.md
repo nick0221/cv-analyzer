@@ -33,26 +33,46 @@ npm run dev        # http://localhost:3000
 Open the app, upload a PDF/DOCX/TXT or paste the resume text, optionally paste a
 job description, and click **Analyze resume**.
 
-### Optional: AI wording enhancement
+### Optional: AI enhancement
 
 The scoring is fully deterministic and runs locally on your server. There is an
-optional checkbox, *"Improve wording with AI"*, that sends the resume text plus
-the computed findings to an OpenAI-compatible endpoint to rewrite the feedback
-more specifically. It is **opt-in, off by default, and changes nothing about the
-score** — only the phrasing of the recommendations.
+optional checkbox, *"AI enhancement"*, that sends the resume text plus the
+computed findings to an OpenAI-compatible endpoint to do three things the rules
+engine cannot:
+
+1. **Sharpen the feedback** — rephrase the recommendations more specifically.
+2. **Rewrite your weakest bullets** — the bullets with no number/metric are
+   returned as copy-ready before/after edits in the form *strong verb + action +
+   measurable result*. The model is instructed **never to invent a metric**; it
+   emits a bracketed placeholder such as `[X%]` or `[N users]` and explains why.
+3. **A recruiter second opinion** — a blunt 2–3 sentence read plus strengths,
+   concerns, and a verdict (Strong / Competitive / Needs work / High risk).
+
+It is **opt-in, off by default, and changes nothing about the score** — the
+score, grade, and per-dimension numbers are identical with or without it.
 
 Enable it by setting these environment variables (otherwise the checkbox is a
 silent no-op):
 
 ```bash
-OPENAI_API_KEY=sk-...                 # required to turn the feature on
-OPENAI_MODEL=gpt-4o-mini              # optional, this is the default
-OPENAI_BASE_URL=https://api.openai.com   # optional; any OpenAI-compatible root
+OPENAI_API_KEY=...                    # required to turn the feature on
+OPENAI_MODEL=gpt-oss-120b              # optional
+OPENAI_BASE_URL=https://api.groq.com/openai   # optional; any OpenAI-compatible root
 ```
+
+Any OpenAI-compatible provider works by changing `OPENAI_BASE_URL`/`OPENAI_MODEL`.
+For a **free, no-credit-card** setup, [Groq](https://console.groq.com) serves
+`openai/gpt-oss-120b` on a free tier (30 req/min, ~1,000 req/day) and does **not**
+train on API inputs, which matters because a resume is personal data. Cloudflare
+Workers AI (`https://api.cloudflare.com/client/v4/accounts/<id>/ai/v1`, model
+`@cf/openai/gpt-oss-120b`) is a close second with 10,000 free Neurons/day.
 
 Because a resume is personal data, the request is only made when the user ticks
 the box, and a failure (bad key, rate limit, malformed response) degrades
 gracefully back to the deterministic analysis with a warning rather than an error.
+Model output is validated before it is shown: a rewrite is discarded unless its
+`original` matches a bullet we actually sent, and an unrecognized verdict is
+dropped — so the AI cannot invent content or mislabel the resume.
 
 ### Export
 

@@ -71,6 +71,10 @@ export interface AnalysisResult {
   enhanced?: boolean;
   enhancedModel?: string;
   enhancedSummary?: string;
+  /** AI-rewritten bullets (opt-in enhancement only). */
+  bulletRewrites?: BulletRewrite[];
+  /** AI recruiter second opinion (opt-in enhancement only). */
+  secondOpinion?: SecondOpinion;
 }
 
 export interface AnalyzeRequest {
@@ -78,4 +82,29 @@ export interface AnalyzeRequest {
   text?: string;
   /** Optional target job description for keyword matching. */
   jobDescription?: string;
+}
+
+/**
+ * An AI-proposed rewrite of a single resume bullet. Only produced by the
+ * optional, opt-in enhancement pass — never by the deterministic engine.
+ */
+export interface BulletRewrite {
+  /** The bullet exactly as it appeared in the resume. */
+  original: string;
+  /** The rewritten bullet (strong verb + action + measurable result). */
+  rewrite: string;
+  /** Why the rewrite is stronger (e.g. "added a metric placeholder"). */
+  why?: string;
+}
+
+/**
+ * A blunt, recruiter-style read of the resume. Advisory only: it does not
+ * change the score, grade, or any per-dimension number.
+ */
+export interface SecondOpinion {
+  summary: string;
+  strengths: string[];
+  concerns: string[];
+  /** One of: "Strong" | "Competitive" | "Needs work" | "High risk". */
+  verdict?: string;
 }

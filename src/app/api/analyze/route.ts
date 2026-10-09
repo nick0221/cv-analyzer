@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
     return v === "1" || v === "true";
   });
   if (wantsAi && process.env.OPENAI_API_KEY) {
-    const enhancement = await enhanceAnalysis(result, text);
+    const enhancement = await enhanceAnalysis(result, text, { jobDescription });
     if (enhancement.enhanced) {
       result = applyEnhancement(result, enhancement);
     } else {
