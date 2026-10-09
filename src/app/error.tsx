@@ -14,17 +14,20 @@ export default function Error({
   }, [error]);
 
   return (
-    <main className="mx-auto flex min-h-[60vh] w-full max-w-3xl flex-col items-center justify-center px-5 py-12 text-center">
-      <h1 className="text-2xl font-bold text-zinc-50">Something went wrong</h1>
-      <p className="mt-2 max-w-md text-sm text-zinc-400">
+    <main className="mx-auto flex min-h-[70vh] w-full max-w-[1080px] flex-col items-center justify-center px-5 py-12 text-center sm:px-8">
+      <p className="font-mono text-[12px] uppercase tracking-[0.14em] text-[#b42318]">error</p>
+      <h1 className="mt-3 text-[32px] font-semibold tracking-[-1.28px] text-[#171717]">
+        Something went wrong
+      </h1>
+      <p className="mt-3 max-w-md text-[15px] leading-relaxed text-[#4d4d4d]">
         The page hit an unexpected error. You can try again — your resume text is not stored.
       </p>
       {error.digest && (
-        <p className="mt-1 text-xs text-zinc-600">Reference: {error.digest}</p>
+        <p className="mt-2 font-mono text-[11px] text-[#b0b0b0]">ref: {error.digest}</p>
       )}
       <button
         onClick={reset}
-        className="mt-6 rounded-xl bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-400"
+        className="mt-6 rounded-md bg-[#171717] px-5 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-black"
       >
         Try again
       </button>

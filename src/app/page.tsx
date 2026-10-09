@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { track } from "@vercel/analytics";
 import type { AnalysisResult } from "@/lib/types";
 import { ScoreGauge } from "@/components/ScoreGauge";
@@ -39,6 +39,20 @@ export default function Home() {
     getConsentServerSnapshot,
   );
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLElement>(null);
+
+  // When a fresh result arrives, bring it into view (the results mount below
+  // the fold). Honour prefers-reduced-motion and never steal focus on mobile.
+  useEffect(() => {
+    if (!result || !resultsRef.current) return;
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    resultsRef.current.scrollIntoView({
+      behavior: reduce ? "auto" : "smooth",
+      block: "start",
+    });
+  }, [result]);
 
   function onConsentToggle(checked: boolean) {
     if (checked) {
@@ -140,7 +154,7 @@ export default function Home() {
   return (
     <main className="mx-auto w-full max-w-[1080px] px-5 pb-24 pt-10 sm:px-8">
       {/* ── Masthead ─────────────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between" data-print="hide">
         <div className="flex items-center gap-2.5">
           <span className="grid h-7 w-7 place-items-center rounded-md bg-[#171717] font-mono text-[12px] font-medium text-white">
             CV
@@ -176,6 +190,7 @@ export default function Home() {
           </div>
           <button
             onClick={loadSample}
+            data-print="hide"
             className="rounded-full border border-[#e2e2e2] bg-white px-3 py-1 font-mono text-[11px] font-medium text-[#4d4d4d] transition-colors hover:border-[#b0b0b0] hover:text-[#171717]"
           >
             Try a sample resume →
@@ -184,7 +199,7 @@ export default function Home() {
       </section>
 
       {/* ── Workbench ────────────────────────────────────────────────────── */}
-      <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_360px]">
+      <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_360px]" data-print="hide">
         {/* Left column: input */}
         <div className="space-y-4">
           <div className="rounded-lg bg-white p-5 shadow-[rgba(0,0,0,0.08)_0px_0px_0px_1px,rgba(0,0,0,0.04)_0px_2px_2px,rgba(0,0,0,0.04)_0px_8px_8px_-8px,#fafafa_0px_0px_0px_1px]">
@@ -359,7 +374,7 @@ export default function Home() {
         {/* Right column: rubric card */}
         <aside className="h-fit rounded-lg border border-[#ebebeb] bg-white p-5">
           <div className="flex items-baseline justify-between">
-            <h2 className="text-[15px] font-medium tracking-[-0.32px] text-[#171717]">What&amp;s scored</h2>
+            <h2 className="text-[15px] font-medium tracking-[-0.32px] text-[#171717]">What&apos;s scored</h2>
             <span className="font-mono text-[11px] text-[#b0b0b0]">10 dims</span>
           </div>
           <ul className="mt-4 space-y-3">
@@ -384,7 +399,8 @@ export default function Home() {
       {/* ── Results ──────────────────────────────────────────────────────── */}
       {result && (
         <section
-          className="mt-16 space-y-8"
+          ref={resultsRef}
+          className="mt-16 scroll-mt-6 space-y-8"
           aria-live="polite"
           aria-label="Analysis results"
         >
@@ -575,11 +591,13 @@ export default function Home() {
         </div>
       </footer>
 
-      <ConsentBanner
-        open={!consent && !bannerDismissed}
-        onAccept={acceptFromBanner}
-        onDecline={() => setBannerDismissed(true)}
-      />
+      <div data-print="hide">
+        <ConsentBanner
+          open={!consent && !bannerDismissed}
+          onAccept={acceptFromBanner}
+          onDecline={() => setBannerDismissed(true)}
+        />
+      </div>
     </main>
   );
 }

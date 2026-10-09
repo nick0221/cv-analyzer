@@ -22,3 +22,45 @@
     rgba(0, 0, 0, 0.04) 0px 8px 8px -8px,
     #fafafa 0px 0px 0px 1px;
 }
+
+/* ── Print: people print resume feedback. Strip chrome, keep the report. ── */
+@media print {
+  /* Hide interactive-only chrome: upload form, sticky banners, buttons. */
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  /* Flatten the soft shadows so the report doesn't waste ink. */
+  * {
+    box-shadow: none !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* Never split a recommendation or dimension card across pages. */
+  section,
+  details,
+  .print-keep {
+    break-inside: avoid;
+  }
+
+  /* Show the "what we read" panel expanded on paper. */
+  details[open] > pre,
+  details > pre {
+    max-height: none !important;
+    overflow: visible !important;
+    white-space: pre-wrap !important;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+}
