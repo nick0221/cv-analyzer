@@ -55,9 +55,9 @@ Enable it by setting these environment variables (otherwise the checkbox is a
 silent no-op):
 
 ```bash
-OPENAI_API_KEY=...                    # required to turn the feature on
-OPENAI_MODEL=gpt-oss-120b              # optional
-OPENAI_BASE_URL=https://api.groq.com/openai   # optional; any OpenAI-compatible root
+OPENAI_API_KEY=gsk_...                            # required to turn the feature on
+OPENAI_MODEL=openai/gpt-oss-120b                  # optional (note the vendor prefix)
+OPENAI_BASE_URL=https://api.groq.com/openai       # optional; any OpenAI-compatible root
 ```
 
 Any OpenAI-compatible provider works by changing `OPENAI_BASE_URL`/`OPENAI_MODEL`.

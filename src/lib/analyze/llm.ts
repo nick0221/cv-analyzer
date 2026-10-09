@@ -31,6 +31,15 @@ export interface EnhanceResult {
   }>;
   bulletRewrites?: BulletRewrite[];
   secondOpinion?: SecondOpinion;
+  /**
+   * Why enhancement failed, when `enhanced` is false. Purely diagnostic — used
+   * to surface a useful warning and a server log instead of a silent no-op.
+   */
+  reason?: "network" | "http" | "invalid-response" | "empty" | "unparseable";
+  /** HTTP status from the provider, when reason is "http". */
+  status?: number;
+  /** Truncated provider error body. Never contains the API key. */
+  detail?: string;
 }
 
 /** Caps: how many bullets and how much text we ship to the model. */
@@ -82,11 +91,41 @@ function buildPayload(result: AnalysisResult, text: string, jobDescription: stri
   };
 }
 
+/**
+ * Build the request body. Two variants exist because OpenAI-compatible
+ * providers are not uniformly compatible:
+ *  - "primary": the modern shape (single user message, max_completion_tokens,
+ *    JSON object mode). Groq's gpt-oss models advise against a system role and
+ *    use max_completion_tokens; OpenAI/Cloudflare/OpenRouter accept both.
+ *  - "compat": the most conservative shape (no response_format, max_tokens),
+ *    used as a one-shot retry so an unknown provider still has a chance.
+ */
+function requestBody(model: string, payload: string, variant: "primary" | "compat") {
+  // Fold the system prompt into the user message: gpt-oss on Groq is trained
+  // without a system role, and this is harmless for every other provider.
+  const content = `${SYSTEM_PROMPT}\n\n${payload}`;
+  const common = {
+    model,
+    temperature: 0.2,
+    messages: [{ role: "user", content }],
+  };
+  if (variant === "primary") {
+    return {
+      ...common,
+      // Generous cap: reasoning models (gpt-oss) bill reasoning tokens too.
+      max_completion_tokens: 3000,
+      response_format: { type: "json_object" },
+    };
+  }
+  return { ...common, max_tokens: 3000 };
+}
+
 function callChat(
   url: string,
   apiKey: string,
   model: string,
   payload: string,
+  variant: "primary" | "compat" = "primary",
 ): Promise<Response> {
   return fetch(url, {
     method: "POST",
@@ -94,17 +133,35 @@ function callChat(
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: 2048,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: payload },
-      ],
-    }),
+    body: JSON.stringify(requestBody(model, payload, variant)),
   });
+}
+
+/**
+ * Tolerant JSON extraction. Reasoning models sometimes wrap JSON in prose or a
+ * markdown fence; scanning for the first balanced object avoids losing a good
+ * response to a cosmetic wrapper.
+ */
+function parseJsonLoose(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    // fall through to salvage
+  }
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates = [fenced?.[1], content];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const start = candidate.indexOf("{");
+    const end = candidate.lastIndexOf("}");
+    if (start === -1 || end <= start) continue;
+    try {
+      return JSON.parse(candidate.slice(start, end + 1));
+    } catch {
+      // try the next candidate
+    }
+  }
+  return undefined;
 }
 
 const SCHEMA = `{"summary": string|null, "recommendations": [{"index": number, "title": string, "why": string, "fix": string}], "bulletRewrites": [{"original": string, "rewrite": string, "why": string}], "secondOpinion": {"summary": string, "strengths": string[], "concerns": string[], "verdict": string}}`;
@@ -199,35 +256,50 @@ export async function enhanceAnalysis(
 
   let response: Response;
   try {
-    response = await callChat(url, apiKey, model, payload);
+    response = await callChat(url, apiKey, model, payload, "primary");
+    // A provider that rejects the modern shape (unknown max_tokens /
+    // response_format rules) gets one conservative retry before we give up.
+    if (response.status === 400 || response.status === 422) {
+      response = await callChat(url, apiKey, model, payload, "compat");
+    }
   } catch {
-    return { enhanced: false };
+    return { enhanced: false, reason: "network" };
   }
 
-  if (!response.ok) return { enhanced: false };
+  if (!response.ok) {
+    // Capture the provider's message so a misconfigured model/param is visible
+    // instead of a silent no-op. Never includes the key.
+    let detail = "";
+    try {
+      const body = await response.text();
+      detail = body.slice(0, 300);
+    } catch {
+      // ignore
+    }
+    return { enhanced: false, reason: "http", status: response.status, detail };
+  }
 
   let data: Record<string, unknown>;
   try {
     data = (await response.json()) as Record<string, unknown>;
   } catch {
-    return { enhanced: false };
+    return { enhanced: false, reason: "invalid-response" };
   }
 
   const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
   const content = choices?.[0]?.message?.content;
-  if (!content) return { enhanced: false };
+  if (!content) return { enhanced: false, reason: "empty" };
 
-  let parsed: {
-    summary?: string | null;
-    recommendations?: Array<{ index: number; title?: string; why?: string; fix?: string }>;
-    bulletRewrites?: unknown;
-    secondOpinion?: unknown;
-  };
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    return { enhanced: false };
-  }
+  const parsedAny = parseJsonLoose(content) as
+    | {
+        summary?: string | null;
+        recommendations?: Array<{ index: number; title?: string; why?: string; fix?: string }>;
+        bulletRewrites?: unknown;
+        secondOpinion?: unknown;
+      }
+    | undefined;
+  if (!parsedAny) return { enhanced: false, reason: "unparseable" };
+  const parsed = parsedAny;
 
   return {
     enhanced: true,

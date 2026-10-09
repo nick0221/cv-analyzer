@@ -56,12 +56,27 @@ describe("AI enhancement wiring in the route", () => {
     expect(body.enhanced).toBeFalsy();
   });
 
-  it("stays 200 with a warning when aiEnhance=1 but the LLM fails", async () => {
+  it("stays 200 with a specific warning when aiEnhance=1 but the LLM fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 502 })));
     const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.2"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.enhanced).toBeFalsy();
-    expect(body.warnings.join(" ")).toMatch(/unavailable/i);
+    // The warning must name the failure, not collapse to a generic "unavailable".
+    expect(body.warnings.join(" ")).toMatch(/HTTP 502/);
+    expect(body.warnings.join(" ")).toMatch(/standard analysis/i);
+  });
+
+  it("reports a network failure distinctly", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("ECONNREFUSED");
+      }),
+    );
+    const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.3"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.warnings.join(" ")).toMatch(/could not be reached/i);
   });
 });

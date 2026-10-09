@@ -125,7 +125,33 @@ export async function POST(req: NextRequest) {
     if (enhancement.enhanced) {
       result = applyEnhancement(result, enhancement);
     } else {
-      result.warnings.push("AI enhancement was requested but unavailable; showing the standard analysis.");
+      // Be specific: a silent "unavailable" hides a misconfigured model or a
+      // provider that rejected our request shape.
+      result.warnings.push(aiWarning(enhancement));
+      console.error(
+        JSON.stringify({
+          event: "ai_enhance_failed",
+          reason: enhancement.reason ?? "unknown",
+          status: enhancement.status,
+          detail: enhancement.detail,
+          model: process.env.OPENAI_MODEL,
+        }),
+      );
+    }
+  }
+
+  /** Turn an enhancement failure into one actionable user-facing line. */
+  function aiWarning(e: { reason?: string; status?: number }): string {
+    switch (e.reason) {
+      case "network":
+        return "AI enhancement was requested but the AI service could not be reached; showing the standard analysis.";
+      case "http":
+        return `AI enhancement was requested but the AI service rejected it (HTTP ${e.status ?? "?"}). Showing the standard analysis — check OPENAI_MODEL and OPENAI_BASE_URL.`;
+      case "unparseable":
+      case "invalid-response":
+        return "AI enhancement returned an unexpected response; showing the standard analysis.";
+      default:
+        return "AI enhancement was requested but unavailable; showing the standard analysis.";
     }
   }
 

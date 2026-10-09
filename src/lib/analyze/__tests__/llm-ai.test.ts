@@ -46,6 +46,103 @@ describe("unquantifiedBullets", () => {
   });
 });
 
+describe("provider compatibility (Groq / gpt-oss)", () => {
+  /** Capture the parsed request body the app sends. */
+  function captureBody(): () => Record<string, unknown> {
+    let captured: Record<string, unknown> = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: { body?: string }) => {
+        captured = JSON.parse(String(init?.body ?? "{}"));
+        return new Response(
+          JSON.stringify({ model: "m", choices: [{ message: { content: "{}" } }] }),
+          { status: 200 },
+        );
+      }),
+    );
+    return () => captured;
+  }
+
+  it("sends NO system role and uses max_completion_tokens (gpt-oss on Groq rejects a system role)", async () => {
+    const getBody = captureBody();
+    await enhanceAnalysis(baseResult(), RESUME, { apiKey: "test" });
+    const body = getBody();
+
+    const messages = body.messages as Array<{ role: string }>;
+    expect(messages).toBeDefined();
+    expect(messages.every((m) => m.role === "user")).toBe(true);
+    expect(JSON.stringify(messages)).not.toContain('"system"');
+
+    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(2048);
+    expect(body.max_tokens).toBeUndefined();
+  });
+
+  it("retries once with the conservative shape when the provider rejects the modern one", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: { body?: string }) => {
+        bodies.push(JSON.parse(String(init?.body ?? "{}")));
+        call += 1;
+        if (call === 1) return new Response("bad request", { status: 400 });
+        return new Response(
+          JSON.stringify({ model: "m", choices: [{ message: { content: "{}" } }] }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const e = await enhanceAnalysis(baseResult(), RESUME, { apiKey: "test" });
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].response_format).toBeDefined(); // modern shape first
+    expect(bodies[1].response_format).toBeUndefined(); // compat retry
+    expect(bodies[1].max_tokens).toBeDefined();
+    expect(e.enhanced).toBe(true);
+  });
+
+  it("salvages JSON wrapped in prose or a markdown fence", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              model: "m",
+              choices: [
+                {
+                  message: {
+                    content:
+                      'Sure! Here is the result:\n```json\n{"summary":"Ok.","recommendations":[],"secondOpinion":{"summary":"Fine.","strengths":[],"concerns":[],"verdict":"Strong"}}\n```',
+                  },
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+    const e = await enhanceAnalysis(baseResult(), RESUME, { apiKey: "test" });
+    expect(e.enhanced).toBe(true);
+    expect(e.secondOpinion?.verdict).toBe("Strong");
+  });
+
+  it("surfaces the provider's error text when it rejects the request", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response('{"error":{"message":"model_not_found"}}', { status: 404 }),
+      ),
+    );
+    const e = await enhanceAnalysis(baseResult(), RESUME, { apiKey: "test" });
+    expect(e.enhanced).toBe(false);
+    expect(e.reason).toBe("http");
+    expect(e.status).toBe(404);
+    expect(e.detail).toContain("model_not_found");
+  });
+});
+
 describe("the request payload actually carries the bullets", () => {
   /** Capture the user message the app sends, parsed out of the request body. */
   function captureUserMessage(): () => string {
