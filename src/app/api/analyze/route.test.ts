@@ -47,6 +47,15 @@ describe("POST /api/analyze", () => {
     expect(Array.isArray(body.dimensions)).toBe(true);
   });
 
+  it("echoes back the analyzed text as extractedText", async () => {
+    const res = await POST(makeReq({ fields: { text: LONG_RESUME } }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.extractedText).toBe(LONG_RESUME);
+    // And it stays in sync with the score's word count.
+    expect(body.extractedText.split(/\s+/).filter(Boolean).length).toBe(body.wordCount);
+  });
+
   it("returns 400 when the text is too short", async () => {
     const res = await POST(makeReq({ fields: { text: "too short" } }));
     expect(res.status).toBe(400);

@@ -111,6 +111,10 @@ export async function POST(req: NextRequest) {
   const started = Date.now();
   let result = analyzeResume(text, { jobDescription }, { pages, warnings });
 
+  // Echo the analyzed text back so users can verify extraction handled their
+  // resume correctly (and catch scanned-PDF / mangling cases).
+  result.extractedText = text;
+
   // Optional AI enhancement: only when the user opted in AND a key is configured.
   const wantsAi = ["aiEnhance", "useAiEnhance"].some((k) => {
     const v = formData.get(k);

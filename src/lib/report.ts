@@ -30,6 +30,14 @@ export function buildMarkdownReport(result: AnalysisResult, opts: { filename?: s
     lines.push("");
   }
 
+  if (result.extractedText) {
+    lines.push(`## Extracted text`);
+    lines.push("```");
+    lines.push(result.extractedText);
+    lines.push("```");
+    lines.push("");
+  }
+
   lines.push(`## Score breakdown`);
   for (const d of result.dimensions) {
     lines.push(`### ${d.label} — ${d.score}/100 (${d.key})`);

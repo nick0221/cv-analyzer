@@ -1,0 +1,30 @@
+Jane Doe
+jane.doe@example.com | +1 555 123 4567 | San Francisco, CA
+https://linkedin.com/in/janedoe | https://github.com/janedoe
+
+Senior Software Engineer with 8 years of experience building web platforms at scale. Led teams
+of up to 6 engineers, owned payments and infrastructure projects, and shipped features used by
+over 2,000 daily active users.
+
+Experience
+
+Senior Software Engineer, Acme — San Francisco, CA
+Mar 2021 – Present
+- Led a team of 6 engineers, reducing deploy time 40% across 3 services.
+- Launched a payments feature that grew revenue by $250K in 6 months.
+- Cut API latency 60% by adding Redis caching for 12 endpoints.
+- Mentored 4 junior engineers; two promoted to mid-level within a year.
+
+Software Engineer, Globex — Remote
+Jun 2018 – Feb 2021
+- Built 15 React dashboards used by 2,000 daily active users.
+- Migrated 8 services to Kubernetes, cutting infrastructure costs 25%.
+- Integrated GraphQL gateway, reducing client payloads by 30%.
+
+Education
+
+B.Sc. Computer Science, State University, 2018 — GPA 3.8
+
+Skills
+
+React, TypeScript, Node.js, Next.js, PostgreSQL, Redis, AWS, Docker, Kubernetes, GraphQL, CI/CD, Terraform

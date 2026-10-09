@@ -30,6 +30,9 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [useAI, setUseAI] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  // Tracks whether the last result came from a file (extracted text) so the
+  // "what we read" panel only appears when it is meaningful.
+  const [source, setSource] = useState<"file" | "paste" | null>(null);
   const consent = useSyncExternalStore(
     subscribeConsent,
     getConsentSnapshot,
@@ -90,6 +93,7 @@ export default function Home() {
       }
       const parsed = data as AnalysisResult;
       setResult(parsed);
+      setSource(file ? "file" : "paste");
       setLoading(false);
       track("resume_analyzed", {
         score: Math.round(parsed.score),
@@ -111,7 +115,24 @@ export default function Home() {
     setJobDescription("");
     setResult(null);
     setError(null);
+    setSource(null);
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  /** One-click demo: load a sample resume so a first-time visitor can see the
+   * product work without hunting for a file. */
+  async function loadSample() {
+    setError(null);
+    setResult(null);
+    setMode("paste");
+    try {
+      const res = await fetch("/sample-resume.txt");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setText(await res.text());
+      setFile(null);
+    } catch {
+      setError("Couldn't load the sample resume right now — try again in a moment.");
+    }
   }
 
   const hasInput = Boolean(file || text.trim());
@@ -144,7 +165,7 @@ export default function Home() {
           Upload or paste a resume and the analyzer scores it across 10 dimensions, then tells
           you exactly what to change and how.
         </p>
-        <div className="mt-5 flex items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <div className="flex h-6 items-center gap-1.5 rounded-full bg-[#f0f4ff] px-2.5">
             <span className="h-1.5 w-1.5 rounded-full bg-[#0a5fd0]" />
             <span className="font-mono text-[11px] font-medium text-[#0a5fd0]">10 dimensions</span>
@@ -153,6 +174,12 @@ export default function Home() {
             <span className="h-1.5 w-1.5 rounded-full bg-[#067647]" />
             <span className="font-mono text-[11px] font-medium text-[#067647]">0 data stored</span>
           </div>
+          <button
+            onClick={loadSample}
+            className="rounded-full border border-[#e2e2e2] bg-white px-3 py-1 font-mono text-[11px] font-medium text-[#4d4d4d] transition-colors hover:border-[#b0b0b0] hover:text-[#171717]"
+          >
+            Try a sample resume →
+          </button>
         </div>
       </section>
 
@@ -389,6 +416,28 @@ export default function Home() {
               {result.match.provided && <Stat label="JD match" value={`${result.match.score}%`} />}
             </div>
           </div>
+
+          {/* What we read — extracted text echo (file uploads only) */}
+          {source === "file" && result.extractedText && (
+            <details className="group rounded-lg border border-[#ebebeb] bg-white p-5">
+              <summary className="flex cursor-pointer list-none items-baseline justify-between gap-3">
+                <span className="text-[20px] font-semibold tracking-[-0.96px] text-[#171717]">
+                  What we read
+                </span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#b0b0b0]">
+                  {result.extractedText.split(/\s+/).filter(Boolean).length} words ·{" "}
+                  <span className="inline-block transition-transform group-open:rotate-90">▸</span>
+                </span>
+              </summary>
+              <p className="mt-3 border-t border-[#f0f0f0] pt-3 text-[13px] leading-relaxed text-[#808080]">
+                This is the text the analyzer extracted from your file. If it looks wrong or
+                missing parts of your resume (common with scanned PDFs), paste the text instead.
+              </p>
+              <pre className="mt-3 max-h-72 overflow-auto rounded-md border border-[#f0f0f0] bg-[#fafafa] p-3.5 font-mono text-[12.5px] leading-relaxed text-[#4d4d4d]">
+                {result.extractedText}
+              </pre>
+            </details>
+          )}
 
           {result.enhanced && (
             <p className="rounded-md border border-[#e6d5f2] bg-[#fbf5ff] px-3.5 py-2.5 text-[13px] text-[#7a3cae]">

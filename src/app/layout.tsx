@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s · Resume Quality Analyzer",
   },
   description:
-    "Upload or paste your resume and get a quality score across 9 dimensions, a breakdown of what is weak, and prioritized, actionable fixes. Optionally match it against a job description.",
+    "Upload or paste your resume and get a quality score across 10 dimensions, a breakdown of what is weak, and prioritized, actionable fixes. Optionally match it against a job description.",
   applicationName: "Resume Quality Analyzer",
   keywords: [
     "resume analyzer",
@@ -35,13 +35,13 @@ export const metadata: Metadata = {
     siteName: "Resume Quality Analyzer",
     title: "Resume Quality Analyzer — score your CV and get fixes",
     description:
-      "Score your resume across 9 dimensions and get prioritized, actionable fixes — no signup, your CV is not stored.",
+      "Score your resume across 10 dimensions and get prioritized, actionable fixes — no signup, your CV is not stored.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Resume Quality Analyzer",
     description:
-      "Score your resume across 9 dimensions and get prioritized, actionable fixes — no signup, your CV is not stored.",
+      "Score your resume across 10 dimensions and get prioritized, actionable fixes — no signup, your CV is not stored.",
   },
   robots: {
     index: true,

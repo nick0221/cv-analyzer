@@ -61,6 +61,12 @@ export interface AnalysisResult {
   recommendations: Recommendation[];
   match: MatchResult;
   warnings: string[];
+  /**
+   * The text the analysis actually ran on, echoed back so the user can verify
+   * extraction picked up their real resume (catch scanned-PDF / mangling cases).
+   * Optional: the LLM enhancement path and older clients may omit it.
+   */
+  extractedText?: string;
   /** Present only when the optional LLM enhancement ran. */
   enhanced?: boolean;
   enhancedModel?: string;
