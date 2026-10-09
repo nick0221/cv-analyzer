@@ -72,6 +72,20 @@ export const STOPWORDS = new Set([
   "job", "candidate", "candidates", "ability", "able", "strong", "good", "great",
   "will", "ensure", "ensuring", "help", "helping", "including", "include", "well",
   "who", "whom", "whose", "every", "each", "other", "others", "across", "within",
+  // more generic job-posting filler that should never count as a "keyword"
+  "expect", "expects", "expecting", "expected", "offer", "offers", "offering",
+  "provide", "provides", "providing", "seek", "seeks", "seeking", "ideal",
+  "relevant", "related", "similar", "based", "position", "positions", "opportunity",
+  "opportunities", "apply", "applicant", "applicants", "responsibility",
+  "responsibilities", "qualification", "qualifications", "requirement",
+  "requirements", "skills", "skill", "knowledge", "understanding", "experience",
+  "years", "year", "degree", "team", "teams", "company", "office", "remote",
+  "hybrid", "onsite", "full", "part", "time", "contract", "permanent", "salary",
+  "benefits", "bonus", "equity", "vacation", "please", "contact", "email",
+  "benefit", "holiday", "pension", "insurance", "training", "career", "growth",
+  "culture", "diverse", "inclusive", "equal", "opportunity", "employer",
+  "hiring", "hired", "build", "built", "worked", "before", "after",
+  "application", "applications", "responsibilities", "tasks", "duties",
 ]);
 
 /** Paragraphs = blank-line separated chunks. */

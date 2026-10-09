@@ -139,5 +139,8 @@ curl -X POST http://localhost:3000/api/analyze -F 'file=@fixtures/sample-resume.
   tells the user to paste the text instead.
 - Score rules are heuristics tuned by eye, not a trained model. They are
   deliberately conservative and explain every deduction.
-- The job-description matcher uses stemmed token overlap, not embeddings, so it
-  can miss synonyms (e.g. "Postgres" vs "PostgreSQL").
+- The job-description matcher uses stemmed token overlap plus a curated
+  alias table (`src/lib/analyze/synonyms.ts`), not embeddings. It handles common
+  equivalences (Postgres/PostgreSQL, k8s/Kubernetes, JS/JavaScript, AWS/Amazon
+  Web Services, ML/Machine Learning, …) but will still miss synonyms that are
+  not in the alias list. Extend `ALIAS_GROUPS` to add more.

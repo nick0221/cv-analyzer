@@ -53,10 +53,17 @@ describe("matchJobDescription", () => {
       // GraphQL and Kubernetes are marked required/must in the JD and absent.
       expect(m.mustHaveMissing.length).toBeGreaterThanOrEqual(2);
       expect(m.mustHaveMissing).toContain("graphql");
-      // But at least the resume satisfies "react", "next.js", "typescript"… if present.
-      expect(m.mustHaveFound.length).toBeGreaterThan(0);
       // And the must-have gap is surfaced as a high-priority recommendation.
       expect(m.recommendations.some((r) => r.title.includes("Must-have"))).toBe(true);
+    });
+
+    it("recognizes a must-have the resume does satisfy", () => {
+      // React is marked required here and the resume genuinely has it.
+      const jd = "React is required. You must know React and Kubernetes. Kubernetes is required.";
+      const resume = "Built React and Next.js applications at scale.";
+      const m = matchJobDescription(resume, jd);
+      expect(m.mustHaveFound).toContain("react");
+      expect(m.mustHaveMissing).toContain("kubernetes");
     });
   });
 

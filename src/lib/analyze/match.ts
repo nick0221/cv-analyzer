@@ -1,5 +1,6 @@
 import type { MatchResult, Recommendation } from "../types";
 import { stemClean, STOPWORDS, clamp } from "./text";
+import { canonicalKey, canonicalKeysIn } from "./synonyms";
 
 /** Lowercase tokens, keeping internal dots/dashes so "next.js" stays whole. */
 function tokenize(text: string): string[] {
@@ -10,15 +11,9 @@ function tokenize(text: string): string[] {
 }
 
 /** Whole-word tokens (for phrase-level presence checks). */
-function wordTokens(text: string): string[] {
-  return text.toLowerCase().match(/[a-z0-9+#./-]+/g) ?? [];
-}
-
 /** Whether every stemmed word of the phrase appears in the resume. */
 function containsPhrase(resumeText: string, phrase: string): boolean {
-  const phraseStems = phrase.split(/\s+/).map(stemClean);
-  const resumeStems = new Set(wordTokens(resumeText).map(stemClean));
-  return phraseStems.every((s) => resumeStems.has(s));
+  return canonicalKeysIn(resumeText, tokenize, stemClean).has(canonicalKey(phrase, stemClean));
 }
 
 /** Count verbatim occurrences of a phrase in the resume (exact resonance). */
@@ -112,16 +107,20 @@ export function matchJobDescription(resumeText: string, jobDescription?: string)
     };
   }
 
-  const resumeStems = new Set(tokenize(resumeText).map(stemClean));
+  // Canonical key set (aliases collapsed) so "Postgres" matches "PostgreSQL".
+  const resumeKeys = canonicalKeysIn(resumeText, tokenize, stemClean);
 
   const terms = extractJobTerms(jd);
   const found: string[] = [];
   const missing: string[] = [];
 
   for (const term of terms) {
-    const stems = term.split(/\s+/).map(stemClean);
-    const hit = stems.every((s) => resumeStems.has(s));
-    (hit ? found : missing).push(term);
+    // Aliased terms reduce to one canonical key; unaliased multi-word terms
+    // are matched when every word is present.
+    const words = term.split(/\s+/);
+    const present = resumeKeys.has(canonicalKey(term, stemClean))
+      || words.every((w) => resumeKeys.has(canonicalKey(w, stemClean)));
+    (present ? found : missing).push(term);
   }
 
   const score = terms.length === 0 ? 0 : clamp(Math.round((found.length / terms.length) * 100));
@@ -130,7 +129,7 @@ export function matchJobDescription(resumeText: string, jobDescription?: string)
 
   // Must-have vs nice-to-have split using the JD's own language.
   const mustHave = extractMustHaveTerms(jd);
-  const mustMissing = mustHave.filter((t) => !resumeStems.has(stemClean(t)) && !containsPhrase(resumeText, t));
+  const mustMissing = mustHave.filter((t) => !containsPhrase(resumeText, t));
   const mustFound = mustHave.filter((t) => !mustMissing.includes(t));
 
   if (mustMissing.length > 0) {
@@ -165,12 +164,14 @@ export function matchJobDescription(resumeText: string, jobDescription?: string)
     const expSection = expEndGuess > firstExperienceIdx
       ? resumeText.slice(firstExperienceIdx, expEndGuess)
       : resumeText.slice(firstExperienceIdx);
-    const expStems = new Set(tokenize(expSection).map(stemClean));
+    const expKeys = canonicalKeysIn(expSection, tokenize, stemClean);
     for (const term of terms) {
-      const stems = term.split(/\s+/).map(stemClean);
-      if (stems.some((s) => GENERIC_TERMS.has(s))) continue;
-      const presentAnywhere = stems.every((s) => resumeStems.has(s));
-      const presentInExperience = stems.every((s) => expStems.has(s));
+      const words = term.split(/\s+/);
+      if (words.some((s) => GENERIC_TERMS.has(stemClean(s)))) continue;
+      const presentAnywhere = resumeKeys.has(canonicalKey(term, stemClean))
+        || words.every((w) => resumeKeys.has(canonicalKey(w, stemClean)));
+      const presentInExperience = expKeys.has(canonicalKey(term, stemClean))
+        || words.every((w) => expKeys.has(canonicalKey(w, stemClean)));
       if (presentAnywhere && !presentInExperience) buriedFound.push(term);
     }
   }
