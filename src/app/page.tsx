@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { track } from "@vercel/analytics";
 import type { AnalysisResult } from "@/lib/types";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { DimensionBar } from "@/components/DimensionBar";
@@ -55,6 +56,8 @@ export default function Home() {
     }
     setError(null);
     setFile(f);
+    // Coarse funnel signal only — never the filename or contents.
+    track("resume_uploaded", { kind: f.name.split(".").pop()?.toLowerCase() ?? "unknown" });
   }, []);
 
   async function analyze() {
@@ -78,11 +81,20 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Something went wrong analyzing the resume.");
+        track("resume_analyze_failed", { status: res.status });
         return;
       }
-      setResult(data as AnalysisResult);
+      const parsed = data as AnalysisResult;
+      setResult(parsed);
+      track("resume_analyzed", {
+        score: Math.round(parsed.score),
+        grade: parsed.grade,
+        source: file ? "file" : "text",
+        withJd: Boolean(jobDescription.trim()),
+      });
     } catch {
       setError("Network error - please try again.");
+      track("resume_analyze_failed", { status: 0 });
     } finally {
       setLoading(false);
     }
