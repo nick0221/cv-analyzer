@@ -80,6 +80,34 @@ describe("AI enhancement wiring in the route", () => {
     expect(body.warnings.join(" ")).toMatch(/could not be reached/i);
   });
 
+  it("names a billing/quota rejection instead of a bare HTTP code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            '{"error":{"code":"credit_balance_exhausted","message":"You have no credits remaining."}}',
+            { status: 429 },
+          ),
+      ),
+    );
+    const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.5"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.warnings.join(" ")).toMatch(/credits or quota/i);
+    expect(body.warnings.join(" ")).toMatch(/free provider/i);
+  });
+
+  it("names a rejected key distinctly", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response('{"error":{"message":"Incorrect API key"}}', { status: 401 })),
+    );
+    const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.6"));
+    const body = await res.json();
+    expect(body.warnings.join(" ")).toMatch(/key was rejected/i);
+  });
+
   it("says plainly when AI was requested but the deployment has no key", async () => {
     // Simulate a deployment with no provider configured.
     const saved = process.env.OPENAI_API_KEY;
