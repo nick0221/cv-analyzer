@@ -16,7 +16,7 @@ function req(fields: Record<string, string>, ip = "9.9.9.9") {
   return r;
 }
 
-describe("AI enhancement wiring in the route", () => {
+describe("AI enhancement wiring in the route (streaming)", () => {
   beforeEach(() => {
     resetRateLimits();
     vi.stubEnv("OPENAI_API_KEY", "test-key");
@@ -26,90 +26,31 @@ describe("AI enhancement wiring in the route", () => {
     vi.restoreAllMocks();
   });
 
-  it("calls the LLM and marks the result enhanced when aiEnhance=1", async () => {
-    const mockFetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          model: "mock-model",
-          choices: [{ message: { content: JSON.stringify({ summary: "S", recommendations: [] }) } }],
-        }),
-        { status: 200 },
-      ),
-    );
+  it("is INSTANT: never calls the LLM inline; marks aiStatus pending when opted in", async () => {
+    const mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
 
     const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.1"));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(mockFetch).toHaveBeenCalledOnce();
-    expect(body.enhanced).toBe(true);
-    expect(body.enhancedModel).toBe("mock-model");
+    expect(mockFetch).not.toHaveBeenCalled(); // the slow provider call is NOT here
+    expect(body.score).toBeGreaterThan(0);
+    expect(body.aiStatus).toBe("pending");
+    expect(body.enhanced).toBeFalsy(); // hydration happens on /api/ai
   });
 
   it("does NOT call the LLM when aiEnhance is absent (default)", async () => {
-    const mockFetch = vi.fn(async () => new Response("{}", { status: 200 }));
+    const mockFetch = vi.fn(async () => new Response("{}\n", { status: 200 }));
     vi.stubGlobal("fetch", mockFetch);
     const res = await POST(req({ text: RESUME }, "9.9.9.2"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(mockFetch).not.toHaveBeenCalled();
     expect(body.enhanced).toBeFalsy();
-  });
-
-  it("stays 200 with a specific warning when aiEnhance=1 but the LLM fails", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 502 })));
-    const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.2"));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.enhanced).toBeFalsy();
-    // The warning must name the failure, not collapse to a generic "unavailable".
-    expect(body.warnings.join(" ")).toMatch(/HTTP 502/);
-    expect(body.warnings.join(" ")).toMatch(/standard analysis/i);
-  });
-
-  it("reports a network failure distinctly", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("ECONNREFUSED");
-      }),
-    );
-    const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.3"));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.warnings.join(" ")).toMatch(/could not be reached/i);
-  });
-
-  it("names a billing/quota rejection instead of a bare HTTP code", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            '{"error":{"code":"credit_balance_exhausted","message":"You have no credits remaining."}}',
-            { status: 429 },
-          ),
-      ),
-    );
-    const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.5"));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.warnings.join(" ")).toMatch(/credits or quota/i);
-    expect(body.warnings.join(" ")).toMatch(/free provider/i);
-  });
-
-  it("names a rejected key distinctly", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response('{"error":{"message":"Incorrect API key"}}', { status: 401 })),
-    );
-    const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.6"));
-    const body = await res.json();
-    expect(body.warnings.join(" ")).toMatch(/key was rejected/i);
+    expect(body.aiStatus).toBeUndefined();
   });
 
   it("says plainly when AI was requested but the deployment has no key", async () => {
-    // Simulate a deployment with no provider configured.
     const saved = process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     try {
@@ -117,10 +58,29 @@ describe("AI enhancement wiring in the route", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.enhanced).toBeFalsy();
-      // Must not be a silent no-op.
+      expect(body.aiStatus).toBeUndefined();
       expect(body.warnings.join(" ")).toMatch(/not configured/i);
     } finally {
       if (saved !== undefined) process.env.OPENAI_API_KEY = saved;
     }
+  });
+
+  it("still returns the deterministic score even when the AI endpoint would be slow", async () => {
+    // Simulate a hypothetical slow provider by asserting we never even reach it.
+    vi.stubGlobal("fetch", vi.fn());
+    const res = await POST(req({ text: RESUME, aiEnhance: "1" }, "9.9.9.7"));
+    const body = await res.json();
+    expect(body.score).toBeGreaterThan(0);
+    expect(body.dimensions.length).toBeGreaterThan(0);
+    expect(body.recommendations.length).toBeGreaterThan(0);
+  });
+});
+
+describe("aiWarning shared helper", () => {
+  it("is exported and maps reasons", async () => {
+    const { aiWarning } = await import("@/lib/aiWarning");
+    expect(aiWarning({ reason: "timeout" })).toMatch(/too long to respond/i);
+    expect(aiWarning({ reason: "http", status: 429 })).toMatch(/credits or quota/i);
+    expect(aiWarning({ reason: "http", status: 401 })).toMatch(/key was rejected/i);
   });
 });

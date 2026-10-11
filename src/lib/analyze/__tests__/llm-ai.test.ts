@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { enhanceAnalysis, applyEnhancement, unquantifiedBullets } from "../llm";
+import { enhanceAnalysis, applyEnhancement, unquantifiedBullets, canonicalVerdict } from "../llm";
 import { analyzeResume } from "../engine";
 import { buildMarkdownReport } from "@/lib/report";
 
@@ -46,6 +46,54 @@ describe("unquantifiedBullets", () => {
   });
 });
 
+describe("canonicalVerdict — free models return free-form sentences", () => {
+  const cases: Array<[string, string | undefined]> = [
+    // Exact matches.
+    ["Strong", "Strong"],
+    ["Competitive", "Competitive"],
+    ["Needs work", "Needs work"],
+    ["High risk", "High risk"],
+    // Free-form sentences we've actually seen.
+    ["Candidate shows potential but needs to highlight accomplishments with data for stronger candidacy.", "Needs work"],
+    ["The resume has potential but requires significant enhancement with metrics and results.", "Needs work"],
+    ["Needs significant expansion and quantification before submission.", "Needs work"],
+    ["Needs revision before submission.", "Needs work"],
+    ["Add specific, quantifiable outcomes to strengthen the resume.", "Needs work"],
+    ["A solid profile with strong impact metrics but some gaps.", "Competitive"],
+    ["An excellent engineer resume. Hire now.", "Strong"],
+    ["This candidate is not ready for the role.", "High risk"],
+    // Unrelated text -> nothing.
+    ["purple unicorns", undefined],
+    ["", undefined],
+  ];
+  for (const [raw, expected] of cases) {
+    it(`maps ${JSON.stringify(raw)} -> ${expected ?? "undefined"}`, () => {
+      expect(canonicalVerdict(raw)).toBe(expected);
+    });
+  }
+});
+
+describe("timeout handling", () => {
+  it("returns a timeout reason instead of failing hard when the provider is slow", async () => {
+    // Honours the AbortSignal like a real fetch would.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener?.("abort", () =>
+              reject(new DOMException("The operation was aborted.", "AbortError")),
+            );
+          }),
+      ),
+    );
+
+    const e = await enhanceAnalysis(baseResult(), RESUME, { apiKey: "test", timeoutMs: 50 });
+    expect(e.enhanced).toBe(false);
+    expect(e.reason).toBe("timeout");
+  });
+});
+
 describe("provider compatibility (Groq / gpt-oss)", () => {
   /** Capture the parsed request body the app sends. */
   function captureBody(): () => Record<string, unknown> {
@@ -73,7 +121,7 @@ describe("provider compatibility (Groq / gpt-oss)", () => {
     expect(messages.every((m) => m.role === "user")).toBe(true);
     expect(JSON.stringify(messages)).not.toContain('"system"');
 
-    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(2048);
+    expect(body.max_completion_tokens).toBeGreaterThan(0);
     expect(body.max_tokens).toBeUndefined();
   });
 

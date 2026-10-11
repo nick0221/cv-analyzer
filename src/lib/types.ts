@@ -75,6 +75,12 @@ export interface AnalysisResult {
   bulletRewrites?: BulletRewrite[];
   /** AI recruiter second opinion (opt-in enhancement only). */
   secondOpinion?: SecondOpinion;
+  /**
+   * Async hydration marker: when the user opted in and a provider is
+   * configured, the deterministic response carries "pending" so the client
+   * knows to call /api/ai with the same text to fill in the AI sections.
+   */
+  aiStatus?: "pending" | "none";
 }
 
 export interface AnalyzeRequest {

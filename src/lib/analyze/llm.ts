@@ -35,7 +35,7 @@ export interface EnhanceResult {
    * Why enhancement failed, when `enhanced` is false. Purely diagnostic — used
    * to surface a useful warning and a server log instead of a silent no-op.
    */
-  reason?: "network" | "http" | "invalid-response" | "empty" | "unparseable";
+  reason?: "network" | "timeout" | "http" | "invalid-response" | "empty" | "unparseable";
   /** HTTP status from the provider, when reason is "http". */
   status?: number;
   /** Truncated provider error body. Never contains the API key. */
@@ -45,6 +45,12 @@ export interface EnhanceResult {
 /** Caps: how many bullets and how much text we ship to the model. */
 const MAX_BULLETS = 5;
 const MAX_RESUME_CHARS = 6000;
+/**
+ * How many recommendations we send. Sending all 17 overwhelms small free
+ * models (they return empty or truncated JSON); the top N carry the value and
+ * the rest stay deterministic. Bump only for stronger paid models.
+ */
+const MAX_RECS_TO_SEND = 6;
 
 /**
  * Bullets the engine would flag as unquantified — the only ones worth rewriting.
@@ -71,14 +77,8 @@ function buildPayload(result: AnalysisResult, text: string, jobDescription: stri
     // Bullets with no metric — the ones we ask the model to rewrite. Must live
     // in the payload, since that is what the model reads.
     unquantifiedBullets: unquantifiedBullets(text),
-    dimensions: result.dimensions.map((d) => ({
-      key: d.key,
-      label: d.label,
-      score: d.score,
-      summary: d.summary,
-      findings: d.findings,
-    })),
-    recommendations: result.recommendations.map((r, i) => ({
+    dimensions: result.dimensions.map((d) => ({ key: d.key, label: d.label, score: d.score })),
+    recommendations: result.recommendations.slice(0, MAX_RECS_TO_SEND).map((r, i) => ({
       index: i,
       priority: r.priority,
       dimension: r.dimension,
@@ -113,7 +113,8 @@ function requestBody(model: string, payload: string, variant: "primary" | "compa
     return {
       ...common,
       // Generous cap: reasoning models (gpt-oss) bill reasoning tokens too.
-      max_completion_tokens: 3000,
+      // Small free models truncate long replies, so keep the budget modest.
+      max_completion_tokens: 1600,
       response_format: { type: "json_object" },
     };
   }
@@ -126,7 +127,10 @@ function callChat(
   model: string,
   payload: string,
   variant: "primary" | "compat" = "primary",
+  timeoutMs = 15000,
 ): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url, {
     method: "POST",
     headers: {
@@ -134,7 +138,8 @@ function callChat(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(requestBody(model, payload, variant)),
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -178,6 +183,7 @@ function buildInstruction(hasJobDescription: boolean): string {
     hasJobDescription
       ? "A target job description is included — name the specific missing keywords where relevant."
       : "No job description was provided.",
+    "CRITICAL: reply with ONLY the JSON object. No explanations, no markdown fences, no preamble.",
     `Return JSON with this shape: ${SCHEMA}`,
   ].join("\n");
 }
@@ -224,21 +230,51 @@ function parseSecondOpinion(v: unknown): SecondOpinion | undefined {
   const summary = typeof o.summary === "string" ? o.summary.trim() : "";
   if (!summary) return undefined;
   const verdictRaw = typeof o.verdict === "string" ? o.verdict.trim() : "";
-  const verdict = ["Strong", "Competitive", "Needs work", "High risk"].find(
-    (x) => x.toLowerCase() === verdictRaw.toLowerCase(),
-  );
   return {
     summary,
     strengths: strArray(o.strengths, 4),
     concerns: strArray(o.concerns, 4),
-    verdict,
+    verdict: canonicalVerdict(verdictRaw),
   };
+}
+
+const VERDICTS = ["Strong", "Competitive", "Needs work", "High risk"] as const;
+
+/**
+ * Map a model's free-form verdict onto one of our four labels. Smaller free
+ * models routinely ignore the enum and return a sentence, so match on meaning
+ * rather than requiring an exact string. Order matters: "high risk" is checked
+ * before "strong" so a phrase containing both still lands correctly.
+ */
+export function canonicalVerdict(raw: string): string | undefined {
+  const s = raw.toLowerCase().trim();
+  if (!s) return undefined;
+  const exact = VERDICTS.find((x) => x.toLowerCase() === s);
+  if (exact) return exact;
+  if (/\bhigh[- ]?risk\b|not ready|unlikely/.test(s)) return "High risk";
+  if (
+    /needs? (work|revision|improvement|significant|major|expansion|quantification)|requires? (significant|major)? ?(enhancement|expansion|quantification|revision)|weak|polish|expand|highlight accomplishments|add specific|quantifiable outcomes|potential but/.test(
+      s,
+    )
+  ) {
+    return "Needs work";
+  }
+  if (/competitiv|solid|decent|moderate|promising/.test(s)) return "Competitive";
+  if (/\bstrong\b|excellent|outstanding|impressive/.test(s)) return "Strong";
+  return undefined;
 }
 
 export async function enhanceAnalysis(
   result: AnalysisResult,
   text: string,
-  opts: { apiKey?: string; model?: string; baseUrl?: string; jobDescription?: string } = {},
+  opts: {
+    apiKey?: string;
+    model?: string;
+    baseUrl?: string;
+    jobDescription?: string;
+    /** Abort the provider call after this many ms. */
+    timeoutMs?: number;
+  } = {},
 ): Promise<EnhanceResult> {
   const apiKey = opts.apiKey ?? process.env.OPENAI_API_KEY;
   if (!apiKey) return { enhanced: false };
@@ -253,19 +289,26 @@ export async function enhanceAnalysis(
 
   const url = `${baseUrl || "https://api.openai.com"}/v1/chat/completions`;
   const jobDescription = opts.jobDescription ?? "";
+  // Provider latency varies wildly (observed 6s–33s on free models). The route
+  // has a hard execution ceiling — aborts are measured in TIME_TO_FIRST_BYTE
+  // wall time, so a slow provider must NOT eat the deterministic result.
+  const timeoutMs = opts.timeoutMs ?? 9000;
   const bullets = unquantifiedBullets(text);
   const payload = `${buildInstruction(Boolean(jobDescription))}\nInput: ${JSON.stringify(buildPayload(result, text, jobDescription))}`;
 
   let response: Response;
   try {
-    response = await callChat(url, apiKey, model, payload, "primary");
+    response = await callChat(url, apiKey, model, payload, "primary", timeoutMs);
     // A provider that rejects the modern shape (unknown max_tokens /
     // response_format rules) gets one conservative retry before we give up.
     if (response.status === 400 || response.status === 422) {
-      response = await callChat(url, apiKey, model, payload, "compat");
+      response = await callChat(url, apiKey, model, payload, "compat", timeoutMs);
     }
-  } catch {
-    return { enhanced: false, reason: "network" };
+  } catch (err) {
+    return {
+      enhanced: false,
+      reason: err instanceof Error && err.name === "AbortError" ? "timeout" : "network",
+    };
   }
 
   if (!response.ok) {
@@ -290,7 +333,21 @@ export async function enhanceAnalysis(
 
   const choices = data?.choices as Array<{ message?: { content?: string } }> | undefined;
   const content = choices?.[0]?.message?.content;
-  if (!content) return { enhanced: false, reason: "empty" };
+
+  // Log the provider's raw shape when we get nothing usable — the difference
+  // between "model is slow" and "the provider changed its response shape".
+  if (!content) {
+    console.error(
+      JSON.stringify({
+        event: "ai_enhance_response",
+        model: (data?.model as string | undefined) ?? model,
+        keys: Object.keys(data),
+        finish: (data as { choices?: Array<{ finish_reason?: string }> })?.choices?.[0]
+          ?.finish_reason,
+      }),
+    );
+    return { enhanced: false, reason: "empty" };
+  }
 
   const parsedAny = parseJsonLoose(content) as
     | {

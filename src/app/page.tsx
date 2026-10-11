@@ -117,6 +117,42 @@ export default function Home() {
         source: file ? "file" : "text",
         withJd: Boolean(jobDescription.trim()),
       });
+
+      // Async AI hydration: the deterministic result is already on screen.
+      // When the provider answers, merge ONLY the AI fields in (the score is
+      // never touched). This runs in the background and never blocks the UI.
+      if (parsed.aiStatus === "pending") {
+        try {
+          const fd2 = new FormData();
+          if (file) fd2.append("file", file);
+          if (text.trim()) fd2.append("text", text);
+          if (jobDescription.trim()) fd2.append("jobDescription", jobDescription);
+          const res2 = await fetch("/api/ai", { method: "POST", body: fd2 });
+          const ai = await res2.json();
+          if (res2.ok && ai.enhanced) {
+            setResult((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                enhanced: true,
+                enhancedModel: ai.enhancedModel,
+                enhancedSummary: ai.enhancedSummary,
+                bulletRewrites: ai.bulletRewrites,
+                secondOpinion: ai.secondOpinion,
+                warnings: [...(prev.warnings ?? []), ...(ai.warnings ?? [])],
+              };
+            });
+          } else if (Array.isArray(ai.warnings) && ai.warnings.length) {
+            setResult((prev) =>
+              prev
+                ? { ...prev, warnings: [...(prev.warnings ?? []), ...ai.warnings] }
+                : prev,
+            );
+          }
+        } catch {
+          // AI enhancement is best-effort; the deterministic result stands.
+        }
+      }
     } catch {
       setError("Network error - please try again.");
       track("resume_analyze_failed", { status: 0 });

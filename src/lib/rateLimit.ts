@@ -1,5 +1,9 @@
 /**
- * Minimal in-process rate limiter (fixed-window token bucket) for /api/analyze.
+ * Minimal in-process rate limiter (fixed-window token bucket) for the API.
+ *
+ * Each route passes a distinct namespace so /api/analyze and /api/ai do not
+ * consume each other's budget: one analysis with AI on costs 1 analyze + 1 ai,
+ * not 2 from a single shared counter.
  *
  * IMPORTANT LIMITATION: this is per-serverless-instance memory. On Vercel the
  * app can run several concurrent instances, so an attacker spread across
